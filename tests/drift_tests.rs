@@ -67,7 +67,7 @@ fn test_drift_detector_with_fixture_queries() {
     let queries = loader.load_dir(fixtures_path()).unwrap();
     let yaml_contents = loader.load_yaml_contents(fixtures_path()).unwrap();
 
-    let detector = DriftDetector::new(queries, yaml_contents);
+    let detector = DriftDetector::new(&queries, &yaml_contents);
 
     let date = NaiveDate::from_ymd_opt(2024, 6, 15).unwrap();
     let report = detector.detect(&[], date, date).unwrap();
@@ -101,7 +101,8 @@ fn test_drift_detector_current_state_with_fixture() {
         &version.schema,
     );
 
-    let detector = DriftDetector::new(vec![simple_query.clone()], yaml_contents.clone());
+    let queries_vec = vec![simple_query.clone()];
+    let detector = DriftDetector::new(&queries_vec, &yaml_contents);
     let report = detector.detect(&[stored], date, date).unwrap();
 
     let drift = report
@@ -131,7 +132,8 @@ fn test_drift_detector_sql_changed_with_fixture() {
     let stored =
         create_stored_state_for_query("simple_query", date, old_sql, yaml_content, &version.schema);
 
-    let detector = DriftDetector::new(vec![simple_query.clone()], yaml_contents.clone());
+    let queries_vec = vec![simple_query.clone()];
+    let detector = DriftDetector::new(&queries_vec, &yaml_contents);
     let report = detector.detect(&[stored], date, date).unwrap();
 
     let drift = report
@@ -235,7 +237,8 @@ fn test_drift_report_summary_with_mixed_states() {
         &version.schema,
     );
 
-    let detector = DriftDetector::new(vec![simple_query.clone()], yaml_contents.clone());
+    let queries_vec = vec![simple_query.clone()];
+    let detector = DriftDetector::new(&queries_vec, &yaml_contents);
     let report = detector
         .detect(&[stored_current, stored_changed], date1, date3)
         .unwrap();
@@ -273,7 +276,8 @@ fn test_needs_rerun_filters_correctly() {
         &version.schema,
     );
 
-    let detector = DriftDetector::new(vec![simple_query.clone()], yaml_contents.clone());
+    let queries_vec = vec![simple_query.clone()];
+    let detector = DriftDetector::new(&queries_vec, &yaml_contents);
     let report = detector.detect(&[stored_current], date1, date2).unwrap();
 
     let needs_rerun = report.needs_rerun();

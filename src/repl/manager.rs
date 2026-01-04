@@ -261,10 +261,9 @@ impl SessionManager {
             let handle = self.create_session(params);
             self.sessions.insert(session_id.to_string(), handle);
         }
-        Ok(self
-            .sessions
+        self.sessions
             .get(session_id)
-            .expect("session was just inserted or already existed"))
+            .ok_or_else(|| JsonRpcResponse::error(None, SESSION_EXPIRED, "Session not found"))
     }
 
     pub fn create_session_with_params(

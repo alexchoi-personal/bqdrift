@@ -1250,7 +1250,7 @@ async fn cmd_sync(
         }
     }
 
-    let detector = DriftDetector::new(queries, yaml_contents);
+    let detector = DriftDetector::new(&queries, &yaml_contents);
     let report = detector.detect(&stored_states, from, to)?;
 
     let drifted: Vec<_> = report.needs_rerun();

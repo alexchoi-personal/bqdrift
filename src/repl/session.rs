@@ -973,7 +973,7 @@ impl ReplSession {
         };
 
         let stored_states = vec![];
-        let detector = crate::DriftDetector::new((*queries).clone(), yaml_contents);
+        let detector = crate::DriftDetector::new(&queries, &yaml_contents);
         let report = match detector.detect(&stored_states, from_date, to_date) {
             Ok(r) => r,
             Err(e) => return ReplResult::failure(e.to_string()),

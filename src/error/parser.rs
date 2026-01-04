@@ -348,15 +348,13 @@ impl ErrorContext {
         dataset: impl Into<String>,
         table: impl Into<String>,
     ) -> Self {
-        self.project = Some(project.into());
-        self.dataset = Some(dataset.into());
-        self.table = Some(table.into());
-        self.resource = Some(format!(
-            "{}.{}.{}",
-            self.project.as_ref().unwrap(),
-            self.dataset.as_ref().unwrap(),
-            self.table.as_ref().unwrap()
-        ));
+        let project = project.into();
+        let dataset = dataset.into();
+        let table = table.into();
+        self.resource = Some(format!("{}.{}.{}", project, dataset, table));
+        self.project = Some(project);
+        self.dataset = Some(dataset);
+        self.table = Some(table);
         self
     }
 }

@@ -6,14 +6,14 @@ use crate::schema::PartitionKey;
 use chrono::NaiveDate;
 use std::collections::HashMap;
 
-pub struct DriftDetector {
-    queries: HashMap<String, QueryDef>,
-    yaml_contents: HashMap<String, String>,
+pub struct DriftDetector<'a> {
+    queries: HashMap<&'a str, &'a QueryDef>,
+    yaml_contents: &'a HashMap<String, String>,
 }
 
-impl DriftDetector {
-    pub fn new(queries: Vec<QueryDef>, yaml_contents: HashMap<String, String>) -> Self {
-        let queries = queries.into_iter().map(|q| (q.name.clone(), q)).collect();
+impl<'a> DriftDetector<'a> {
+    pub fn new(queries: &'a [QueryDef], yaml_contents: &'a HashMap<String, String>) -> Self {
+        let queries = queries.iter().map(|q| (q.name.as_str(), q)).collect();
         Self {
             queries,
             yaml_contents,
@@ -34,7 +34,7 @@ impl DriftDetector {
             stored_map.insert((s.query_name.as_str(), s.partition_date), s);
         }
 
-        for (query_name, query) in &self.queries {
+        for (&query_name, &query) in &self.queries {
             let yaml_content = self
                 .yaml_contents
                 .get(query_name)
@@ -49,7 +49,7 @@ impl DriftDetector {
                     query_name,
                     query,
                     current,
-                    stored_map.get(&(query_name.as_str(), current)),
+                    stored_map.get(&(query_name, current)),
                     yaml_content,
                     &mut checksum_cache,
                 );
@@ -75,56 +75,33 @@ impl DriftDetector {
     ) -> PartitionDrift {
         let version = query.get_version_for_date(partition_date);
 
-        let (state, executed_version, caused_by, executed_sql_b64) = match (version, stored) {
-            (None, _) => (DriftState::NeverRun, None, None, None),
+        let (state, executed_version, caused_by) = match (version, stored) {
+            (None, _) => (DriftState::NeverRun, None, None),
 
-            (Some(_), None) => (DriftState::NeverRun, None, None, None),
+            (Some(_), None) => (DriftState::NeverRun, None, None),
 
             (Some(v), Some(stored)) => {
                 if stored.status == super::state::ExecutionStatus::Failed {
-                    (
-                        DriftState::Failed,
-                        Some(stored.version),
-                        None,
-                        stored.executed_sql_b64.clone(),
-                    )
+                    (DriftState::Failed, Some(stored.version), None)
                 } else {
                     let current_checksums = checksum_cache.entry(v.version).or_insert_with(|| {
                         Checksums::from_version(v, yaml_content, chrono::Utc::now().date_naive())
                     });
 
                     if current_checksums.schema != stored.schema_checksum {
-                        (
-                            DriftState::SchemaChanged,
-                            Some(stored.version),
-                            None,
-                            stored.executed_sql_b64.clone(),
-                        )
+                        (DriftState::SchemaChanged, Some(stored.version), None)
                     } else if current_checksums.sql != stored.sql_checksum {
-                        (
-                            DriftState::SqlChanged,
-                            Some(stored.version),
-                            None,
-                            stored.executed_sql_b64.clone(),
-                        )
+                        (DriftState::SqlChanged, Some(stored.version), None)
                     } else if v.version != stored.version {
-                        (
-                            DriftState::VersionUpgraded,
-                            Some(stored.version),
-                            None,
-                            stored.executed_sql_b64.clone(),
-                        )
+                        (DriftState::VersionUpgraded, Some(stored.version), None)
                     } else {
-                        (
-                            DriftState::Current,
-                            Some(stored.version),
-                            None,
-                            stored.executed_sql_b64.clone(),
-                        )
+                        (DriftState::Current, Some(stored.version), None)
                     }
                 }
             }
         };
+
+        let executed_sql_b64 = stored.and_then(|s| s.executed_sql_b64.clone());
 
         let current_sql = if state.needs_rerun() {
             version.map(|v| {
@@ -245,7 +222,8 @@ mod tests {
         let query = create_test_query("test_query", "SELECT * FROM source");
         let yaml_contents =
             HashMap::from([("test_query".to_string(), "name: test_query".to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let report = detector.detect(&[], date, date).unwrap();
@@ -268,7 +246,8 @@ mod tests {
         let yaml = "name: test_query";
         let query = create_test_query("test_query", sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let stored = create_stored_state("test_query", date, sql, yaml);
@@ -290,7 +269,8 @@ mod tests {
 
         let query = create_test_query("test_query", new_sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let stored = create_stored_state("test_query", date, old_sql, yaml);
@@ -316,7 +296,8 @@ mod tests {
 
         let query = create_test_query("test_query", new_sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let stored = create_stored_state("test_query", date, old_sql, yaml);
@@ -338,7 +319,8 @@ mod tests {
         let yaml = "name: test_query";
         let query = create_test_query("test_query", sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let mut stored = create_stored_state("test_query", date, sql, yaml);
@@ -358,7 +340,8 @@ mod tests {
         let yaml = "name: test_query";
         let query = create_test_query("test_query", sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
         let mut stored = create_stored_state("test_query", date, sql, yaml);
@@ -379,7 +362,8 @@ mod tests {
         let yaml = "name: test_query";
         let query = create_test_query("test_query", sql);
         let yaml_contents = HashMap::from([("test_query".to_string(), yaml.to_string())]);
-        let detector = DriftDetector::new(vec![query], yaml_contents);
+        let queries = vec![query];
+        let detector = DriftDetector::new(&queries, &yaml_contents);
 
         let from = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         let to = NaiveDate::from_ymd_opt(2024, 1, 5).unwrap();

@@ -104,7 +104,7 @@ impl<'a> ImmutabilityChecker<'a> {
         let mut violations = Vec::new();
 
         let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
-            HashMap::new();
+            HashMap::with_capacity(states.len());
         for state in states {
             states_by_version
                 .entry((state.version, state.sql_revision))

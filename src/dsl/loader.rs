@@ -44,7 +44,7 @@ impl QueryLoader {
         let yaml_files = FileLoader::load_dir(&path, "yaml")
             .map_err(|e| BqDriftError::DslParse(e.to_string()))?;
 
-        let mut contents = HashMap::new();
+        let mut contents = HashMap::with_capacity(yaml_files.len());
         for file in yaml_files {
             let base_dir = file.path.parent().unwrap_or(Path::new("."));
             let processed = self.preprocessor.process(&file.content, base_dir)?;
@@ -68,9 +68,10 @@ impl QueryLoader {
     }
 
     fn resolve_query(&self, mut raw: RawQueryDef, _base_dir: &Path) -> Result<QueryDef> {
-        let mut resolved_schemas: HashMap<u32, Schema> = HashMap::new();
-        let mut resolved_invariants: HashMap<u32, InvariantsDef> = HashMap::new();
-        let mut versions: Vec<VersionDef> = Vec::with_capacity(raw.versions.len());
+        let version_count = raw.versions.len();
+        let mut resolved_schemas: HashMap<u32, Schema> = HashMap::with_capacity(version_count);
+        let mut resolved_invariants: HashMap<u32, InvariantsDef> = HashMap::with_capacity(version_count);
+        let mut versions: Vec<VersionDef> = Vec::with_capacity(version_count);
 
         raw.versions.sort_by(|a, b| {
             a.effective_from

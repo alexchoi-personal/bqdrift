@@ -1,14 +1,10 @@
 #[derive(Debug, Clone)]
-pub struct ColumnDef {
-    pub name: String,
-    pub column_type: String,
-}
-
-#[derive(Debug, Clone)]
 pub struct ColumnInfo {
     pub name: String,
     pub column_type: String,
 }
+
+pub type ColumnDef = ColumnInfo;
 
 #[derive(Debug, Clone)]
 pub struct QueryResult {

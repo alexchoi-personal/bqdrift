@@ -119,29 +119,4 @@ impl MigrationTracker {
 
         self.client.execute_query(&sql).await
     }
-
-    #[deprecated(
-        since = "0.2.0",
-        note = "Not implemented. Use BigQuery directly to query the tracking table."
-    )]
-    pub async fn get_last_run(
-        &self,
-        _query_name: &str,
-        _partition_date: NaiveDate,
-    ) -> Result<Option<QueryRun>> {
-        Ok(None)
-    }
-
-    #[deprecated(
-        since = "0.2.0",
-        note = "Not implemented. Use BigQuery directly to query the tracking table."
-    )]
-    pub async fn get_runs_for_date_range(
-        &self,
-        _query_name: &str,
-        _from: NaiveDate,
-        _to: NaiveDate,
-    ) -> Result<Vec<QueryRun>> {
-        Ok(Vec::new())
-    }
 }

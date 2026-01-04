@@ -15,7 +15,7 @@ pub enum PartitionType {
     IngestionTime,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PartitionKey {
     Hour(NaiveDateTime),

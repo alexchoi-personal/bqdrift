@@ -1023,13 +1023,17 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let queries_to_audit: Vec<_> = match &query_filter {
-            Some(name) => queries
+        let filtered_queries: Option<Vec<_>> = query_filter.as_ref().map(|name| {
+            queries
                 .iter()
                 .filter(|q| &q.name == name)
                 .cloned()
-                .collect(),
-            None => (*queries).clone(),
+                .collect()
+        });
+
+        let queries_to_audit: &[crate::dsl::QueryDef] = match &filtered_queries {
+            Some(filtered) => filtered,
+            None => &queries,
         };
 
         if queries_to_audit.is_empty() {
@@ -1040,7 +1044,7 @@ impl ReplSession {
         }
 
         let stored_states = vec![];
-        let auditor = crate::SourceAuditor::new(&queries_to_audit);
+        let auditor = crate::SourceAuditor::new(queries_to_audit);
         let report = auditor.audit(&stored_states);
 
         let entries_to_show: Vec<_> = if modified_only {

@@ -929,6 +929,14 @@ async fn cmd_backfill(
     let from_key = parse_partition_key(&from, partition_type)?;
     let to_key = parse_partition_key(&to, partition_type)?;
 
+    if from_key > to_key {
+        return Err(format!(
+            "'from' date ({}) must be before or equal to 'to' date ({})",
+            from_key, to_key
+        )
+        .into());
+    }
+
     info!(
         "Backfilling '{}' from {} to {}",
         query_name, from_key, to_key

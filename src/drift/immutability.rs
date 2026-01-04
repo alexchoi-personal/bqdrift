@@ -16,19 +16,23 @@ pub struct ImmutabilityViolation {
 
 impl ImmutabilityViolation {
     pub fn stored_sql_preview(&self, max_len: usize) -> &str {
-        if self.stored_sql.len() <= max_len {
-            &self.stored_sql
-        } else {
-            &self.stored_sql[..max_len]
-        }
+        truncate_to_char_boundary(&self.stored_sql, max_len)
     }
 
     pub fn current_sql_preview(&self, max_len: usize) -> &str {
-        if self.current_sql.len() <= max_len {
-            &self.current_sql
-        } else {
-            &self.current_sql[..max_len]
+        truncate_to_char_boundary(&self.current_sql, max_len)
+    }
+}
+
+fn truncate_to_char_boundary(s: &str, max_len: usize) -> &str {
+    if s.len() <= max_len {
+        s
+    } else {
+        let mut end = max_len;
+        while end > 0 && !s.is_char_boundary(end) {
+            end -= 1;
         }
+        &s[..end]
     }
 }
 

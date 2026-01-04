@@ -91,7 +91,8 @@ impl DriftReport {
     }
 
     pub fn by_query(&self) -> HashMap<&str, Vec<&PartitionDrift>> {
-        let mut grouped: HashMap<&str, Vec<&PartitionDrift>> = HashMap::new();
+        let mut grouped: HashMap<&str, Vec<&PartitionDrift>> =
+            HashMap::with_capacity(self.partitions.len().min(64));
         for p in &self.partitions {
             grouped.entry(&p.query_name).or_default().push(p);
         }
@@ -99,7 +100,7 @@ impl DriftReport {
     }
 
     pub fn by_state(&self) -> HashMap<DriftState, Vec<&PartitionDrift>> {
-        let mut grouped: HashMap<DriftState, Vec<&PartitionDrift>> = HashMap::new();
+        let mut grouped: HashMap<DriftState, Vec<&PartitionDrift>> = HashMap::with_capacity(8);
         for p in &self.partitions {
             grouped.entry(p.state).or_default().push(p);
         }
@@ -120,7 +121,7 @@ impl DriftReport {
     }
 
     pub fn summary(&self) -> HashMap<DriftState, usize> {
-        let mut counts: HashMap<DriftState, usize> = HashMap::new();
+        let mut counts: HashMap<DriftState, usize> = HashMap::with_capacity(8);
         for p in &self.partitions {
             *counts.entry(p.state).or_default() += 1;
         }

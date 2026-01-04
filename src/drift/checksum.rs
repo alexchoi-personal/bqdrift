@@ -6,6 +6,7 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
+use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Checksums {
@@ -49,15 +50,27 @@ impl Checksums {
     }
 
     fn schema_to_json(schema: &Schema) -> String {
-        serde_json::to_string(&schema.fields).unwrap_or_default()
+        match serde_json::to_string(&schema.fields) {
+            Ok(json) => json,
+            Err(e) => {
+                warn!("Failed to serialize schema to JSON: {}", e);
+                String::new()
+            }
+        }
     }
 }
 
 impl ExecutionArtifact {
     pub fn create(sql_content: &str, schema: &Schema, yaml_content: &str) -> Self {
         let sql_compressed = compress_to_base64(sql_content);
-        let schema_compressed =
-            compress_to_base64(&serde_json::to_string(&schema.fields).unwrap_or_default());
+        let schema_json = match serde_json::to_string(&schema.fields) {
+            Ok(json) => json,
+            Err(e) => {
+                warn!("Failed to serialize schema to JSON for artifact: {}", e);
+                String::new()
+            }
+        };
+        let schema_compressed = compress_to_base64(&schema_json);
         let yaml_compressed = compress_to_base64(yaml_content);
 
         Self {

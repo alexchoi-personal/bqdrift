@@ -67,15 +67,18 @@ impl QueryLoader {
         self.resolve_query(raw, base_dir)
     }
 
-    fn resolve_query(&self, raw: RawQueryDef, _base_dir: &Path) -> Result<QueryDef> {
+    fn resolve_query(&self, mut raw: RawQueryDef, _base_dir: &Path) -> Result<QueryDef> {
         let mut resolved_schemas: HashMap<u32, Schema> = HashMap::new();
         let mut resolved_invariants: HashMap<u32, InvariantsDef> = HashMap::new();
-        let mut versions: Vec<VersionDef> = Vec::new();
+        let mut versions: Vec<VersionDef> = Vec::with_capacity(raw.versions.len());
 
-        let mut sorted_versions = raw.versions.clone();
-        sorted_versions.sort_by_key(|v| v.version);
+        raw.versions.sort_by(|a, b| {
+            a.effective_from
+                .cmp(&b.effective_from)
+                .then_with(|| a.version.cmp(&b.version))
+        });
 
-        for raw_version in sorted_versions {
+        for raw_version in raw.versions {
             let schema = self
                 .resolver
                 .resolve_schema(&raw_version.schema, &resolved_schemas)?;

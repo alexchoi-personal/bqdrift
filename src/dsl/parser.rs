@@ -125,10 +125,17 @@ impl VersionDef {
 
 impl QueryDef {
     pub fn get_version_for_date(&self, partition_date: NaiveDate) -> Option<&VersionDef> {
-        self.versions
-            .iter()
-            .filter(|v| v.effective_from <= partition_date)
-            .max_by_key(|v| v.effective_from)
+        if self.versions.is_empty() {
+            return None;
+        }
+        let idx = self
+            .versions
+            .partition_point(|v| v.effective_from <= partition_date);
+        if idx == 0 {
+            None
+        } else {
+            Some(&self.versions[idx - 1])
+        }
     }
 
     pub fn latest_version(&self) -> Option<&VersionDef> {

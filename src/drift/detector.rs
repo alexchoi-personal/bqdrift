@@ -132,18 +132,36 @@ impl<'a> DriftDetector<'a> {
         stored: &PartitionState,
         all_states: &[PartitionState],
     ) -> Option<String> {
-        // Check each upstream dependency recorded in the state
-        for (upstream_name, recorded_time) in &stored.upstream_states {
-            // Find the latest execution of the upstream query for this partition date
-            let upstream_latest = all_states
-                .iter()
-                .filter(|s| {
-                    &s.query_name == upstream_name && s.partition_date == stored.partition_date
-                })
-                .max_by_key(|s| s.executed_at);
+        let state_index = Self::build_state_index(all_states);
+        self.detect_upstream_changed_indexed(stored, &state_index)
+    }
 
-            if let Some(upstream) = upstream_latest {
-                // If upstream ran after we recorded it, we're stale
+    fn build_state_index(
+        all_states: &[PartitionState],
+    ) -> HashMap<(&str, NaiveDate), &PartitionState> {
+        let mut index: HashMap<(&str, NaiveDate), &PartitionState> =
+            HashMap::with_capacity(all_states.len());
+        for state in all_states {
+            let key = (state.query_name.as_str(), state.partition_date);
+            match index.get(&key) {
+                Some(existing) if existing.executed_at >= state.executed_at => {}
+                _ => {
+                    index.insert(key, state);
+                }
+            }
+        }
+        index
+    }
+
+    fn detect_upstream_changed_indexed(
+        &self,
+        stored: &PartitionState,
+        state_index: &HashMap<(&str, NaiveDate), &PartitionState>,
+    ) -> Option<String> {
+        for (upstream_name, recorded_time) in &stored.upstream_states {
+            if let Some(upstream) =
+                state_index.get(&(upstream_name.as_str(), stored.partition_date))
+            {
                 if upstream.executed_at > *recorded_time {
                     return Some(upstream_name.clone());
                 }

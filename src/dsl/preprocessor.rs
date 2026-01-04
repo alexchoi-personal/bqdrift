@@ -35,8 +35,14 @@ impl YamlPreprocessor {
         let mut last_end = 0;
 
         for caps in FILE_PATTERN.captures_iter(content) {
-            let full_match = caps.get(0).expect("regex match has group 0");
-            let file_path = caps.get(1).expect("regex match has group 1").as_str();
+            let full_match = match caps.get(0) {
+                Some(m) => m,
+                None => continue,
+            };
+            let file_path = match caps.get(1) {
+                Some(m) => m.as_str(),
+                None => continue,
+            };
 
             result.push_str(&content[last_end..full_match.start()]);
 
@@ -155,12 +161,7 @@ impl YamlPreprocessor {
     pub fn extract_file_refs(&self, content: &str) -> Vec<String> {
         FILE_PATTERN
             .captures_iter(content)
-            .map(|caps| {
-                caps.get(1)
-                    .expect("regex match has group 1")
-                    .as_str()
-                    .to_string()
-            })
+            .filter_map(|caps| caps.get(1).map(|m| m.as_str().to_string()))
             .collect()
     }
 }

@@ -359,9 +359,11 @@ impl BqClient {
     }
 
     pub async fn ensure_dataset(&self, dataset: &str) -> Result<()> {
+        use gcp_bigquery_client::error::BQError;
+
         match self.client.dataset().get(&self.project_id, dataset).await {
             Ok(_) => Ok(()),
-            Err(_) => {
+            Err(BQError::ResponseError { ref error }) if error.error.code == 404 => {
                 let ds = Dataset::new(&self.project_id, dataset);
                 self.client.dataset().create(ds).await.map_err(|e| {
                     let ctx = ErrorContext::new().with_operation("create_dataset");
@@ -369,10 +371,16 @@ impl BqClient {
                 })?;
                 Ok(())
             }
+            Err(e) => {
+                let ctx = ErrorContext::new().with_operation("check_dataset");
+                Err(BqDriftError::BigQuery(parse_bq_error(e, ctx)))
+            }
         }
     }
 
     pub async fn drop_table(&self, dataset: &str, table: &str) -> Result<()> {
+        use gcp_bigquery_client::error::BQError;
+
         match self
             .client
             .table()
@@ -380,7 +388,17 @@ impl BqClient {
             .await
         {
             Ok(_) => Ok(()),
-            Err(_) => Ok(()),
+            Err(BQError::ResponseError { ref error }) if error.error.code == 404 => Ok(()),
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to drop table {}.{}.{}: {}",
+                    self.project_id,
+                    dataset,
+                    table,
+                    e
+                );
+                Ok(())
+            }
         }
     }
 

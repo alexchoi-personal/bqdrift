@@ -52,7 +52,10 @@ impl DriftDetector {
                     &mut checksum_cache,
                 );
                 report.add(drift);
-                current = current.succ_opt().unwrap_or(current);
+                match current.succ_opt() {
+                    Some(next) => current = next,
+                    None => break,
+                }
             }
         }
 

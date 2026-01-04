@@ -51,7 +51,10 @@ impl ReplSession {
             let queries = self.loader.load_dir(&self.queries_path)?;
             self.cached_queries = Some(queries);
         }
-        Ok(self.cached_queries.as_ref().unwrap())
+        Ok(self
+            .cached_queries
+            .as_ref()
+            .expect("cached_queries was just set above"))
     }
 
     async fn ensure_client(&mut self) -> Result<&BqClient> {
@@ -65,7 +68,7 @@ impl ReplSession {
             let client = BqClient::new(project).await?;
             self.client = Some(client);
         }
-        Ok(self.client.as_ref().unwrap())
+        Ok(self.client.as_ref().expect("client was just set above"))
     }
 
     pub fn reload_queries(&mut self) -> Result<usize> {

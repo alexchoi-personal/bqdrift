@@ -173,7 +173,7 @@ impl<'a> ExecutorRunner<'a> {
             })?;
 
         let sql = version.get_sql_for_date(Utc::now().date_naive());
-        let full_sql = self.build_merge_sql(query_def, sql, &partition_key);
+        let full_sql = Self::build_merge_sql(query_def, sql, &partition_key);
 
         let rows_affected = self
             .executor
@@ -188,71 +188,18 @@ impl<'a> ExecutorRunner<'a> {
         })
     }
 
-    fn build_merge_sql(
-        &self,
-        query_def: &QueryDef,
-        sql: &str,
-        partition_key: &PartitionKey,
-    ) -> String {
+    fn build_merge_sql(query_def: &QueryDef, sql: &str, partition_key: &PartitionKey) -> String {
         let dest_table = format!(
             "{}.{}",
             query_def.destination.dataset, query_def.destination.table
         );
-
         let partition_field = query_def
             .destination
             .partition
             .field
             .as_deref()
             .unwrap_or("date");
-
-        let parameterized_sql = sql.replace(
-            "@partition_date",
-            &format!("'{}'", partition_key.sql_value()),
-        );
-
-        let partition_condition = match partition_key {
-            PartitionKey::Hour(_) => format!(
-                "TIMESTAMP_TRUNC(target.{}, HOUR) = {}",
-                partition_field,
-                partition_key.sql_literal()
-            ),
-            PartitionKey::Day(_) => format!(
-                "target.{} = {}",
-                partition_field,
-                partition_key.sql_literal()
-            ),
-            PartitionKey::Month { .. } => format!(
-                "DATE_TRUNC(target.{}, MONTH) = {}",
-                partition_field,
-                partition_key.sql_literal()
-            ),
-            PartitionKey::Year(_) => format!(
-                "DATE_TRUNC(target.{}, YEAR) = {}",
-                partition_field,
-                partition_key.sql_literal()
-            ),
-            PartitionKey::Range(_) => format!(
-                "target.{} = {}",
-                partition_field,
-                partition_key.sql_literal()
-            ),
-        };
-
-        format!(
-            r#"
-            MERGE `{dest_table}` AS target
-            USING (
-                {parameterized_sql}
-            ) AS source
-            ON FALSE
-            WHEN NOT MATCHED BY SOURCE AND {partition_condition} THEN DELETE
-            WHEN NOT MATCHED BY TARGET THEN INSERT ROW
-            "#,
-            dest_table = dest_table,
-            parameterized_sql = parameterized_sql,
-            partition_condition = partition_condition,
-        )
+        super::sql_builder::build_merge_sql(&dest_table, partition_field, sql, partition_key)
     }
 }
 

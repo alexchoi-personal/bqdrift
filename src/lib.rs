@@ -21,11 +21,12 @@ pub use dsl::{
     ValidationResult, VersionDef,
 };
 pub use error::{BqDriftError, Result};
+#[doc(hidden)]
+#[allow(deprecated)]
 pub use executor::{
-    create_bigquery_executor, create_mock_executor, ColumnDef, ColumnInfo, Executor, ExecutorMode,
-    ExecutorRunner, QueryResult,
+    create_bigquery_executor, create_mock_executor, Executor, ExecutorMode, ExecutorRunner,
 };
-pub use executor::{BqClient, PartitionWriter, Runner};
+pub use executor::{BqClient, ColumnDef, ColumnInfo, PartitionWriter, QueryResult, Runner};
 pub use invariant::{
     resolve_invariants_def, CheckResult, CheckStatus, InvariantCheck, InvariantChecker,
     InvariantDef, InvariantReport, InvariantsDef, InvariantsRef, Severity,

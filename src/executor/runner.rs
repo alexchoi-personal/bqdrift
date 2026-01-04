@@ -63,13 +63,13 @@ impl Runner {
     }
 
     pub async fn run_for_partition(&self, partition_key: PartitionKey) -> Result<RunReport> {
-        let results: Vec<_> = stream::iter(self.queries.iter().cloned())
-            .map(|query| {
+        let results: Vec<_> = stream::iter(0..self.queries.len())
+            .map(|idx| {
                 let pk = partition_key.clone();
-                let writer = &self.writer;
                 async move {
-                    let result = writer.write_partition(&query, pk).await;
-                    (query.name.clone(), result)
+                    let query = &self.queries[idx];
+                    let result = self.writer.write_partition(query, pk).await;
+                    (idx, result)
                 }
             })
             .buffer_unordered(self.parallelism)
@@ -79,11 +79,11 @@ impl Runner {
         let mut stats = Vec::new();
         let mut failures = Vec::new();
 
-        for (query_name, result) in results {
+        for (idx, result) in results {
             match result {
                 Ok(s) => stats.push(s),
                 Err(e) => failures.push(RunFailure {
-                    query_name,
+                    query_name: self.queries[idx].name.clone(),
                     partition_key: partition_key.clone(),
                     error: e.to_string(),
                 }),

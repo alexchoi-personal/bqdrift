@@ -22,12 +22,6 @@ pub struct PartitionState {
     pub status: ExecutionStatus,
 }
 
-impl PartitionState {
-    pub fn partition_key(&self) -> PartitionKey {
-        PartitionKey::Day(self.partition_date)
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum ExecutionStatus {

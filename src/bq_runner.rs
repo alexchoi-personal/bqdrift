@@ -1,5 +1,6 @@
 use std::path::Path;
 use thiserror::Error;
+use tracing::warn;
 
 #[derive(Error, Debug)]
 pub enum BqRunnerError {
@@ -25,12 +26,22 @@ impl FileLoader {
         let pattern = format!("{}/**/*.{}", path.display(), extension);
         let files: Vec<SqlFile> = glob::glob(&pattern)
             .map_err(|e| BqRunnerError::Execution(e.to_string()))?
-            .filter_map(|entry| entry.ok())
-            .filter_map(|path| {
-                std::fs::read_to_string(&path).ok().map(|content| SqlFile {
+            .filter_map(|entry| match entry {
+                Ok(p) => Some(p),
+                Err(e) => {
+                    warn!(error = %e, "Failed to read glob entry");
+                    None
+                }
+            })
+            .filter_map(|path| match std::fs::read_to_string(&path) {
+                Ok(content) => Some(SqlFile {
                     path: path.clone(),
                     content,
-                })
+                }),
+                Err(e) => {
+                    warn!(path = %path.display(), error = %e, "Failed to read file");
+                    None
+                }
             })
             .collect();
         Ok(files)

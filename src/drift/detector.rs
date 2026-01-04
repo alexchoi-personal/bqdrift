@@ -137,7 +137,7 @@ impl<'a> DriftDetector<'a> {
         };
 
         PartitionDrift {
-            query_name: query_name_owned.to_owned(),
+            query_name: query_name_owned.to_string(),
             partition_key: PartitionKey::Day(partition_date),
             state,
             current_version: version.map(|v| v.version).unwrap_or(0),

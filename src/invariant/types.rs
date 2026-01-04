@@ -126,7 +126,14 @@ impl InvariantCheck {
                     return Err("distinct_count check requires at least min or max".to_string());
                 }
             }
-            InvariantCheck::NullPercentage { .. } => {}
+            InvariantCheck::NullPercentage { max_percentage, .. } => {
+                if *max_percentage < 0.0 || *max_percentage > 100.0 {
+                    return Err(format!(
+                        "null_percentage max_percentage must be between 0 and 100, got {}",
+                        max_percentage
+                    ));
+                }
+            }
         }
         Ok(())
     }

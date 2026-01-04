@@ -103,16 +103,32 @@ impl QueryValidator {
     fn check_record_fields(query: &QueryDef, errors: &mut Vec<ValidationError>) {
         for version in &query.versions {
             for field in &version.schema.fields {
-                Self::check_record_field_recursive(field, version.version, errors);
+                Self::check_record_field_recursive(field, version.version, errors, 0);
             }
         }
     }
+
+    const MAX_RECORD_NESTING_DEPTH: usize = 15;
 
     fn check_record_field_recursive(
         field: &crate::schema::Field,
         version: u32,
         errors: &mut Vec<ValidationError>,
+        depth: usize,
     ) {
+        if depth > Self::MAX_RECORD_NESTING_DEPTH {
+            errors.push(ValidationError {
+                code: "E005",
+                message: format!(
+                    "v{}: RECORD field '{}' exceeds maximum nesting depth of {}",
+                    version,
+                    field.name,
+                    Self::MAX_RECORD_NESTING_DEPTH
+                ),
+            });
+            return;
+        }
+
         if field.field_type == BqType::Record {
             match &field.fields {
                 None => {
@@ -135,7 +151,7 @@ impl QueryValidator {
                 }
                 Some(nested) => {
                     for f in nested {
-                        Self::check_record_field_recursive(f, version, errors);
+                        Self::check_record_field_recursive(f, version, errors, depth + 1);
                     }
                 }
             }

@@ -4,7 +4,7 @@ use crate::invariant::{ExtendedInvariants, InvariantDef, InvariantsDef, Invarian
 use crate::schema::{Field, Schema};
 use once_cell::sync::Lazy;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::warn;
 
 static VARIABLE_PATTERN: Lazy<Regex> = Lazy::new(|| {
@@ -52,10 +52,8 @@ impl VariableResolver {
 
         let mut fields: Vec<Field> = base_schema.fields.clone();
 
-        // Remove fields
-        for name in &ext.remove {
-            fields.retain(|f| &f.name != name);
-        }
+        let removals: HashSet<&str> = ext.remove.iter().map(|s| s.as_str()).collect();
+        fields.retain(|f| !removals.contains(f.name.as_str()));
 
         // Modify existing fields (replace by name)
         for modified in &ext.modify {

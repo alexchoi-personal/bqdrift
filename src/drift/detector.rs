@@ -40,13 +40,16 @@ impl DriftDetector {
                 .map(|s| s.as_str())
                 .unwrap_or("");
 
+            let mut checksum_cache: HashMap<u32, Checksums> = HashMap::new();
+
             let mut current = from;
             while current <= to {
-                let drift = self.detect_partition(
+                let drift = self.detect_partition_cached(
                     query,
                     current,
                     stored_map.get(&(query_name.clone(), current)),
                     yaml_content,
+                    &mut checksum_cache,
                 );
                 report.add(drift);
                 current = current.succ_opt().unwrap_or(current);
@@ -56,12 +59,13 @@ impl DriftDetector {
         Ok(report)
     }
 
-    fn detect_partition(
+    fn detect_partition_cached(
         &self,
         query: &QueryDef,
         partition_date: NaiveDate,
         stored: Option<&&PartitionState>,
         yaml_content: &str,
+        checksum_cache: &mut HashMap<u32, Checksums>,
     ) -> PartitionDrift {
         let version = query.get_version_for_date(partition_date);
         let current_sql = version.map(|v| {
@@ -83,8 +87,16 @@ impl DriftDetector {
                         stored.executed_sql_b64.clone(),
                     )
                 } else {
-                    let current_checksums =
-                        Checksums::from_version(v, yaml_content, chrono::Utc::now().date_naive());
+                    let current_checksums = checksum_cache
+                        .entry(v.version)
+                        .or_insert_with(|| {
+                            Checksums::from_version(
+                                v,
+                                yaml_content,
+                                chrono::Utc::now().date_naive(),
+                            )
+                        })
+                        .clone();
 
                     if current_checksums.schema != stored.schema_checksum {
                         (
@@ -108,7 +120,6 @@ impl DriftDetector {
                             stored.executed_sql_b64.clone(),
                         )
                     } else {
-                        // TODO: Check upstream_changed
                         (
                             DriftState::Current,
                             Some(stored.version),

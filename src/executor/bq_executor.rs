@@ -25,6 +25,10 @@ pub struct ExecutorRunFailure {
     pub error: String,
 }
 
+#[deprecated(
+    since = "0.2.0",
+    note = "Use Runner with BqClient instead. ExecutorRunner uses a stub Executor that doesn't perform real operations."
+)]
 pub struct ExecutorRunner<'a> {
     executor: &'a Executor,
     queries: Vec<QueryDef>,

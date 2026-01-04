@@ -1,19 +1,19 @@
 use crate::error::{BqDriftError, Result};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub struct YamlPreprocessor {
-    file_pattern: Regex,
-}
+static FILE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"\$\{\{\s*file:\s*([^\s}]+)\s*\}\}"#).expect("file pattern regex is valid")
+});
+
+pub struct YamlPreprocessor;
 
 impl YamlPreprocessor {
     pub fn new() -> Self {
-        Self {
-            file_pattern: Regex::new(r#"\$\{\{\s*file:\s*([^\s}]+)\s*\}\}"#)
-                .expect("file pattern regex is valid"),
-        }
+        Self
     }
 
     pub fn process(&self, content: &str, base_dir: &Path) -> Result<String> {
@@ -34,7 +34,7 @@ impl YamlPreprocessor {
         let mut result = String::new();
         let mut last_end = 0;
 
-        for caps in self.file_pattern.captures_iter(content) {
+        for caps in FILE_PATTERN.captures_iter(content) {
             let full_match = caps.get(0).expect("regex match has group 0");
             let file_path = caps.get(1).expect("regex match has group 1").as_str();
 
@@ -149,11 +149,11 @@ impl YamlPreprocessor {
     }
 
     pub fn has_file_includes(&self, content: &str) -> bool {
-        self.file_pattern.is_match(content)
+        FILE_PATTERN.is_match(content)
     }
 
     pub fn extract_file_refs(&self, content: &str) -> Vec<String> {
-        self.file_pattern
+        FILE_PATTERN
             .captures_iter(content)
             .map(|caps| {
                 caps.get(1)

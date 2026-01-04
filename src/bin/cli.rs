@@ -1352,9 +1352,10 @@ fn print_immutability_violations(violations: &[ImmutabilityViolation]) {
             for date in &violation.affected_partitions {
                 eprintln!("  - {}", date);
             }
-        } else {
-            let first = violation.affected_partitions.first().unwrap();
-            let last = violation.affected_partitions.last().unwrap();
+        } else if let (Some(first), Some(last)) = (
+            violation.affected_partitions.first(),
+            violation.affected_partitions.last(),
+        ) {
             eprintln!(
                 "  {} to {} ({} partitions)",
                 first,

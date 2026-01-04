@@ -88,6 +88,8 @@ impl BqClient {
     }
 
     pub async fn table_exists(&self, dataset: &str, table: &str) -> Result<bool> {
+        use gcp_bigquery_client::error::BQError;
+
         match self
             .client
             .table()
@@ -95,7 +97,13 @@ impl BqClient {
             .await
         {
             Ok(_) => Ok(true),
-            Err(_) => Ok(false),
+            Err(BQError::ResponseError { ref error }) if error.error.code == 404 => Ok(false),
+            Err(e) => {
+                let ctx = ErrorContext::new()
+                    .with_operation("table_exists")
+                    .with_table(&self.project_id, dataset, table);
+                Err(BqDriftError::BigQuery(parse_bq_error(e, ctx)))
+            }
         }
     }
 

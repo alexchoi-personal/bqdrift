@@ -261,28 +261,31 @@ impl SessionManager {
             let handle = self.create_session(params);
             self.sessions.insert(session_id.to_string(), handle);
         }
-        Ok(self.sessions.get(session_id).unwrap())
+        Ok(self
+            .sessions
+            .get(session_id)
+            .expect("session was just inserted or already existed"))
     }
 
     pub fn create_session_with_params(
         &mut self,
         params: SessionCreateParams,
     ) -> Result<SessionInfo, JsonRpcResponse> {
+        let session_id = params
+            .session_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+
+        if let Some(existing) = self.sessions.get(&session_id) {
+            return Ok(existing.info());
+        }
+
         if !self.can_create_session() {
             return Err(JsonRpcResponse::error(
                 None,
                 SESSION_LIMIT,
                 format!("Session limit reached (max: {})", self.config.max_sessions),
             ));
-        }
-
-        let session_id = params
-            .session_id
-            .clone()
-            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-
-        if self.sessions.contains_key(&session_id) {
-            return Ok(self.sessions.get(&session_id).unwrap().info());
         }
 
         let handle = self.create_session(params);

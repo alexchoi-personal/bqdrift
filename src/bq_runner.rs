@@ -87,6 +87,10 @@ pub struct QueryResult {
     pub rows: Vec<Vec<String>>,
 }
 
+#[deprecated(
+    since = "0.2.0",
+    note = "This is a stub that doesn't execute real queries. Use BqClient instead."
+)]
 pub struct Executor {
     mode: ExecutorMode,
 }

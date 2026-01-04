@@ -5,6 +5,7 @@ use crate::error::Result;
 use crate::schema::PartitionKey;
 use chrono::{NaiveDate, Utc};
 use futures::stream::{self, StreamExt};
+use std::collections::HashMap;
 
 const DEFAULT_PARALLELISM: usize = 5;
 
@@ -24,16 +25,27 @@ pub struct RunFailure {
 pub struct Runner {
     writer: PartitionWriter,
     queries: Vec<QueryDef>,
+    query_index: HashMap<String, usize>,
     parallelism: usize,
 }
 
 impl Runner {
     pub fn new(client: BqClient, queries: Vec<QueryDef>) -> Self {
+        let query_index = queries
+            .iter()
+            .enumerate()
+            .map(|(i, q)| (q.name.clone(), i))
+            .collect();
         Self {
             writer: PartitionWriter::new(client),
             queries,
+            query_index,
             parallelism: DEFAULT_PARALLELISM,
         }
+    }
+
+    fn get_query(&self, name: &str) -> Option<&QueryDef> {
+        self.query_index.get(name).map(|&i| &self.queries[i])
     }
 
     pub fn with_parallelism(mut self, parallelism: usize) -> Self {
@@ -51,18 +63,27 @@ impl Runner {
     }
 
     pub async fn run_for_partition(&self, partition_key: PartitionKey) -> Result<RunReport> {
+        let results: Vec<_> = stream::iter(self.queries.iter().cloned())
+            .map(|query| {
+                let pk = partition_key.clone();
+                let writer = &self.writer;
+                async move {
+                    let result = writer.write_partition(&query, pk).await;
+                    (query.name.clone(), result)
+                }
+            })
+            .buffer_unordered(self.parallelism)
+            .collect()
+            .await;
+
         let mut stats = Vec::new();
         let mut failures = Vec::new();
 
-        for query in &self.queries {
-            match self
-                .writer
-                .write_partition(query, partition_key.clone())
-                .await
-            {
+        for (query_name, result) in results {
+            match result {
                 Ok(s) => stats.push(s),
                 Err(e) => failures.push(RunFailure {
-                    query_name: query.name.clone(),
+                    query_name,
                     partition_key: partition_key.clone(),
                     error: e.to_string(),
                 }),
@@ -86,13 +107,9 @@ impl Runner {
         query_name: &str,
         partition_key: PartitionKey,
     ) -> Result<PartitionWriteStats> {
-        let query = self
-            .queries
-            .iter()
-            .find(|q| q.name == query_name)
-            .ok_or_else(|| {
-                crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
-            })?;
+        let query = self.get_query(query_name).ok_or_else(|| {
+            crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
+        })?;
 
         self.writer.write_partition(query, partition_key).await
     }
@@ -119,13 +136,9 @@ impl Runner {
         to: PartitionKey,
         interval: Option<i64>,
     ) -> Result<RunReport> {
-        let query = self
-            .queries
-            .iter()
-            .find(|q| q.name == query_name)
-            .ok_or_else(|| {
-                crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
-            })?;
+        let query = self.get_query(query_name).ok_or_else(|| {
+            crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
+        })?;
 
         let mut partitions = Vec::new();
         let mut current = from;

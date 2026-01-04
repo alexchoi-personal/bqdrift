@@ -2,18 +2,19 @@ use super::parser::{ExtendedSchema, SchemaRef};
 use crate::error::{BqDriftError, Result};
 use crate::invariant::{ExtendedInvariants, InvariantDef, InvariantsDef, InvariantsRef};
 use crate::schema::{Field, Schema};
+use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
 
-pub struct VariableResolver {
-    variable_pattern: Regex,
-}
+static VARIABLE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\$\{\{\s*versions\.(\d+)\.(\w+)\s*\}\}").expect("variable pattern regex is valid")
+});
+
+pub struct VariableResolver;
 
 impl VariableResolver {
     pub fn new() -> Self {
-        Self {
-            variable_pattern: Regex::new(r"\$\{\{\s*versions\.(\d+)\.(\w+)\s*\}\}").unwrap(),
-        }
+        Self
     }
 
     pub fn resolve_schema(
@@ -69,10 +70,10 @@ impl VariableResolver {
     }
 
     fn extract_version_ref(&self, ref_str: &str) -> Result<u32> {
-        if let Some(caps) = self.variable_pattern.captures(ref_str) {
+        if let Some(caps) = VARIABLE_PATTERN.captures(ref_str) {
             let version: u32 = caps
                 .get(1)
-                .unwrap()
+                .expect("regex match has group 1")
                 .as_str()
                 .parse()
                 .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
@@ -87,15 +88,15 @@ impl VariableResolver {
         sql_ref: &str,
         resolved_sqls: &HashMap<u32, String>,
     ) -> Result<String> {
-        if let Some(caps) = self.variable_pattern.captures(sql_ref) {
+        if let Some(caps) = VARIABLE_PATTERN.captures(sql_ref) {
             let version: u32 = caps
                 .get(1)
-                .unwrap()
+                .expect("regex match has group 1")
                 .as_str()
                 .parse()
                 .map_err(|_| BqDriftError::InvalidVersionRef(sql_ref.to_string()))?;
 
-            let field = caps.get(2).unwrap().as_str();
+            let field = caps.get(2).expect("regex match has group 2").as_str();
             if field != "sql" {
                 return Err(BqDriftError::VariableResolution(format!(
                     "Expected 'sql' field, got '{}'",
@@ -112,7 +113,7 @@ impl VariableResolver {
     }
 
     pub fn is_variable_ref(&self, s: &str) -> bool {
-        self.variable_pattern.is_match(s)
+        VARIABLE_PATTERN.is_match(s)
     }
 
     pub fn resolve_invariants(
@@ -184,15 +185,15 @@ impl VariableResolver {
     }
 
     fn extract_invariants_version_ref(&self, ref_str: &str) -> Result<u32> {
-        if let Some(caps) = self.variable_pattern.captures(ref_str) {
+        if let Some(caps) = VARIABLE_PATTERN.captures(ref_str) {
             let version: u32 = caps
                 .get(1)
-                .unwrap()
+                .expect("regex match has group 1")
                 .as_str()
                 .parse()
                 .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
 
-            let field = caps.get(2).unwrap().as_str();
+            let field = caps.get(2).expect("regex match has group 2").as_str();
             if field != "invariants" {
                 return Err(BqDriftError::VariableResolution(format!(
                     "Expected 'invariants' field, got '{}'",

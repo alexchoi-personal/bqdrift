@@ -1,10 +1,12 @@
 use super::checksum::Checksums;
 use super::state::{DriftReport, DriftState, PartitionDrift, PartitionState};
 use crate::dsl::QueryDef;
-use crate::error::Result;
+use crate::error::{BqDriftError, Result};
 use crate::schema::PartitionKey;
 use chrono::NaiveDate;
 use std::collections::HashMap;
+
+const MAX_DETECTION_DAYS: i64 = 365 * 10;
 
 pub struct DriftDetector<'a> {
     queries: HashMap<&'a str, &'a QueryDef>,
@@ -26,7 +28,14 @@ impl<'a> DriftDetector<'a> {
         from: NaiveDate,
         to: NaiveDate,
     ) -> Result<DriftReport> {
-        let num_days = (to - from).num_days().max(0) as usize + 1;
+        let num_days = (to - from).num_days().max(0);
+        if num_days > MAX_DETECTION_DAYS {
+            return Err(BqDriftError::Partition(format!(
+                "Date range too large: {} days exceeds maximum of {} days",
+                num_days, MAX_DETECTION_DAYS
+            )));
+        }
+        let num_days = num_days as usize + 1;
         let estimated_capacity = self.queries.len() * num_days;
         let mut report = DriftReport::with_capacity(estimated_capacity);
 

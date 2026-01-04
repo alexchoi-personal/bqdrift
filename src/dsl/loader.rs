@@ -23,13 +23,31 @@ impl QueryLoader {
     }
 
     pub fn load_dir(&self, path: impl AsRef<Path>) -> Result<Vec<QueryDef>> {
+        let (queries, _) = self.load_dir_with_contents(path)?;
+        Ok(queries)
+    }
+
+    pub fn load_dir_with_contents(
+        &self,
+        path: impl AsRef<Path>,
+    ) -> Result<(Vec<QueryDef>, HashMap<String, String>)> {
         let yaml_files = FileLoader::load_dir(&path, "yaml")
             .map_err(|e| BqDriftError::DslParse(e.to_string()))?;
 
-        yaml_files
-            .into_iter()
-            .map(|file| self.load_query(&file.path))
-            .collect()
+        let mut queries = Vec::with_capacity(yaml_files.len());
+        let mut contents = HashMap::with_capacity(yaml_files.len());
+
+        for file in yaml_files {
+            let base_dir = file.path.parent().unwrap_or(Path::new("."));
+            let processed = self.preprocessor.process(&file.content, base_dir)?;
+            let raw: RawQueryDef = serde_yaml::from_str(&processed)?;
+            let name = raw.name.clone();
+            let query = self.resolve_query(raw, base_dir)?;
+            queries.push(query);
+            contents.insert(name, processed);
+        }
+
+        Ok((queries, contents))
     }
 
     pub fn load_sql_dir(&self, path: impl AsRef<Path>) -> Result<Vec<SqlFile>> {
@@ -41,16 +59,7 @@ impl QueryLoader {
     }
 
     pub fn load_yaml_contents(&self, path: impl AsRef<Path>) -> Result<HashMap<String, String>> {
-        let yaml_files = FileLoader::load_dir(&path, "yaml")
-            .map_err(|e| BqDriftError::DslParse(e.to_string()))?;
-
-        let mut contents = HashMap::with_capacity(yaml_files.len());
-        for file in yaml_files {
-            let base_dir = file.path.parent().unwrap_or(Path::new("."));
-            let processed = self.preprocessor.process(&file.content, base_dir)?;
-            let raw: RawQueryDef = serde_yaml::from_str(&processed)?;
-            contents.insert(raw.name, processed);
-        }
+        let (_, contents) = self.load_dir_with_contents(path)?;
         Ok(contents)
     }
 

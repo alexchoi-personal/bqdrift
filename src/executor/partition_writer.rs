@@ -10,8 +10,6 @@ pub struct PartitionWriteStats {
     pub query_name: String,
     pub version: u32,
     pub partition_key: PartitionKey,
-    pub rows_written: Option<i64>,
-    pub bytes_processed: Option<i64>,
     pub invariant_report: Option<InvariantReport>,
 }
 
@@ -72,8 +70,6 @@ impl PartitionWriter {
             query_name: query_def.name.clone(),
             version: version.version,
             partition_key,
-            rows_written: None,
-            bytes_processed: None,
             invariant_report,
         })
     }
@@ -178,8 +174,6 @@ impl PartitionWriter {
             query_name: query_def.name.clone(),
             version: version.version,
             partition_key,
-            rows_written: None,
-            bytes_processed: None,
             invariant_report,
         })
     }

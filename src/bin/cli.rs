@@ -1208,8 +1208,7 @@ async fn cmd_sync(
     _tracking_dataset: &str,
     allow_source_mutation: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let queries = loader.load_dir(queries_path)?;
-    let yaml_contents = loader.load_yaml_contents(queries_path)?;
+    let (queries, yaml_contents) = loader.load_dir_with_contents(queries_path)?;
 
     let today = chrono::Utc::now().date_naive();
     let from = match from {

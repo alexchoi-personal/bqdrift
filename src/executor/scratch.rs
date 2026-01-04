@@ -155,8 +155,6 @@ impl ScratchWriter {
             partition_key,
             scratch_table: self.scratch_table_fqn(query_def),
             expiration,
-            rows_written: None,
-            bytes_processed: None,
             invariant_report,
         })
     }
@@ -265,8 +263,6 @@ pub struct ScratchWriteStats {
     pub partition_key: PartitionKey,
     pub scratch_table: String,
     pub expiration: DateTime<Utc>,
-    pub rows_written: Option<i64>,
-    pub bytes_processed: Option<i64>,
     pub invariant_report: Option<InvariantReport>,
 }
 

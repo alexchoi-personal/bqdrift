@@ -141,8 +141,6 @@ impl SessionHandle {
 }
 
 struct SessionActor {
-    #[allow(dead_code)]
-    id: String,
     session: ReplSession,
     request_rx: mpsc::Receiver<SessionRequest>,
     request_count: Arc<AtomicU64>,
@@ -151,14 +149,12 @@ struct SessionActor {
 
 impl SessionActor {
     fn new(
-        id: String,
         session: ReplSession,
         request_rx: mpsc::Receiver<SessionRequest>,
         request_count: Arc<AtomicU64>,
         last_activity: Arc<AtomicI64>,
     ) -> Self {
         Self {
-            id,
             session,
             request_rx,
             request_count,
@@ -319,7 +315,6 @@ impl SessionManager {
         let created_at = Utc::now();
 
         let actor = SessionActor::new(
-            id.clone(),
             session,
             request_rx,
             Arc::clone(&request_count),

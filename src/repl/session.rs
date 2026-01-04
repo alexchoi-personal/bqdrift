@@ -5,6 +5,7 @@ use crate::executor::BqClient;
 use crate::invariant::{resolve_invariants_def, CheckStatus, InvariantChecker, Severity};
 use crate::schema::{PartitionKey, PartitionType};
 use chrono::{NaiveDate, Utc};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -13,6 +14,7 @@ pub struct ReplSession {
     queries_path: PathBuf,
     loader: QueryLoader,
     cached_queries: Option<Arc<Vec<QueryDef>>>,
+    cached_yaml_contents: Option<Arc<HashMap<String, String>>>,
     client: Option<BqClient>,
 }
 
@@ -23,6 +25,7 @@ impl ReplSession {
             queries_path,
             loader: QueryLoader::new(),
             cached_queries: None,
+            cached_yaml_contents: None,
             client: None,
         }
     }
@@ -49,12 +52,24 @@ impl ReplSession {
 
     fn ensure_queries(&mut self) -> Result<Arc<Vec<QueryDef>>> {
         if self.cached_queries.is_none() {
-            let queries = self.loader.load_dir(&self.queries_path)?;
+            let (queries, yaml_contents) =
+                self.loader.load_dir_with_contents(&self.queries_path)?;
             self.cached_queries = Some(Arc::new(queries));
+            self.cached_yaml_contents = Some(Arc::new(yaml_contents));
         }
         match &self.cached_queries {
             Some(queries) => Ok(Arc::clone(queries)),
             None => Err(BqDriftError::Repl("Failed to load queries".to_string())),
+        }
+    }
+
+    fn ensure_yaml_contents(&mut self) -> Result<Arc<HashMap<String, String>>> {
+        self.ensure_queries()?;
+        match &self.cached_yaml_contents {
+            Some(contents) => Ok(Arc::clone(contents)),
+            None => Err(BqDriftError::Repl(
+                "Failed to load YAML contents".to_string(),
+            )),
         }
     }
 
@@ -952,7 +967,7 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let yaml_contents = match self.loader.load_yaml_contents(&self.queries_path) {
+        let yaml_contents = match self.ensure_yaml_contents() {
             Ok(c) => c,
             Err(e) => return ReplResult::failure(e.to_string()),
         };

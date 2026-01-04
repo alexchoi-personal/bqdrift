@@ -36,8 +36,6 @@ pub struct Field {
     #[serde(default)]
     pub mode: FieldMode,
     #[serde(default)]
-    pub nullable: bool,
-    #[serde(default)]
     pub description: Option<String>,
     #[serde(default)]
     pub fields: Option<Vec<Field>>,
@@ -49,7 +47,6 @@ impl Field {
             name: name.into(),
             field_type,
             mode: FieldMode::default(),
-            nullable: true,
             description: None,
             fields: None,
         }
@@ -57,7 +54,6 @@ impl Field {
 
     pub fn required(mut self) -> Self {
         self.mode = FieldMode::Required;
-        self.nullable = false;
         self
     }
 

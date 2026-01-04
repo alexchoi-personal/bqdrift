@@ -8,14 +8,12 @@ fn test_field_creation() {
     assert_eq!(field.name, "user_id");
     assert_eq!(field.field_type, BqType::String);
     assert_eq!(field.mode, FieldMode::Nullable);
-    assert!(field.nullable);
 }
 
 #[test]
 fn test_field_required() {
     let field = Field::new("id", BqType::Int64).required();
     assert_eq!(field.mode, FieldMode::Required);
-    assert!(!field.nullable);
 }
 
 #[test]

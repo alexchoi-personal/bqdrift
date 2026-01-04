@@ -2,10 +2,10 @@ use super::parser::{ExtendedSchema, SchemaRef};
 use crate::error::{BqDriftError, Result};
 use crate::invariant::{ExtendedInvariants, InvariantDef, InvariantsDef, InvariantsRef};
 use crate::schema::{Field, Schema};
-use tracing::warn;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+use tracing::warn;
 
 static VARIABLE_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"\$\{\{\s*versions\.(\d+)\.(\w+)\s*\}\}").expect("variable pattern regex is valid")

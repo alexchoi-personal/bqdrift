@@ -7,7 +7,12 @@ use chrono::{NaiveDate, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 
-const DEFAULT_PARALLELISM: usize = 5;
+fn default_parallelism() -> usize {
+    std::env::var("BQDRIFT_PARALLELISM")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5)
+}
 
 #[derive(Debug)]
 pub struct RunReport {
@@ -40,7 +45,7 @@ impl Runner {
             writer: PartitionWriter::new(client),
             queries,
             query_index,
-            parallelism: DEFAULT_PARALLELISM,
+            parallelism: default_parallelism(),
         }
     }
 

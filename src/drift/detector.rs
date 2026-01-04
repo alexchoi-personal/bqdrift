@@ -45,6 +45,7 @@ impl DriftDetector {
             let mut current = from;
             while current <= to {
                 let drift = self.detect_partition_cached(
+                    query_name,
                     query,
                     current,
                     stored_map.get(&(query_name.as_str(), current)),
@@ -64,6 +65,7 @@ impl DriftDetector {
 
     fn detect_partition_cached(
         &self,
+        query_name: &str,
         query: &QueryDef,
         partition_date: NaiveDate,
         stored: Option<&&PartitionState>,
@@ -128,7 +130,7 @@ impl DriftDetector {
         };
 
         PartitionDrift {
-            query_name: query.name.clone(),
+            query_name: query_name.to_string(),
             partition_key: PartitionKey::Day(partition_date),
             state,
             current_version: version.map(|v| v.version).unwrap_or(0),

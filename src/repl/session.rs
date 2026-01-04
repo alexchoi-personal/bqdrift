@@ -6,12 +6,13 @@ use crate::invariant::{resolve_invariants_def, CheckStatus, InvariantChecker, Se
 use crate::schema::{PartitionKey, PartitionType};
 use chrono::{Datelike, NaiveDate, Timelike, Utc};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub struct ReplSession {
     project: Option<String>,
     queries_path: PathBuf,
     loader: QueryLoader,
-    cached_queries: Option<Vec<QueryDef>>,
+    cached_queries: Option<Arc<Vec<QueryDef>>>,
     client: Option<BqClient>,
 }
 
@@ -42,19 +43,20 @@ impl ReplSession {
             .unwrap_or_default()
     }
 
-    pub fn queries(&self) -> Option<&Vec<QueryDef>> {
-        self.cached_queries.as_ref()
+    pub fn queries(&self) -> Option<&[QueryDef]> {
+        self.cached_queries.as_ref().map(|arc| arc.as_slice())
     }
 
-    fn ensure_queries(&mut self) -> Result<&Vec<QueryDef>> {
+    fn ensure_queries(&mut self) -> Result<Arc<Vec<QueryDef>>> {
         if self.cached_queries.is_none() {
             let queries = self.loader.load_dir(&self.queries_path)?;
-            self.cached_queries = Some(queries);
+            self.cached_queries = Some(Arc::new(queries));
         }
-        Ok(self
-            .cached_queries
-            .as_ref()
-            .expect("cached_queries was just set above"))
+        Ok(Arc::clone(
+            self.cached_queries
+                .as_ref()
+                .expect("cached_queries was just set above"),
+        ))
     }
 
     async fn ensure_client(&mut self) -> Result<&BqClient> {
@@ -74,7 +76,7 @@ impl ReplSession {
     pub fn reload_queries(&mut self) -> Result<usize> {
         let queries = self.loader.load_dir(&self.queries_path)?;
         let count = queries.len();
-        self.cached_queries = Some(queries);
+        self.cached_queries = Some(Arc::new(queries));
         Ok(count)
     }
 
@@ -215,7 +217,7 @@ impl ReplSession {
 
     fn cmd_validate(&mut self) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -224,7 +226,7 @@ impl ReplSession {
         let mut total_warnings = 0;
         let mut results = Vec::new();
 
-        for query in &queries {
+        for query in queries.iter() {
             let result = QueryValidator::validate(query);
             let status = if result.is_valid() {
                 if result.has_warnings() {
@@ -295,7 +297,7 @@ impl ReplSession {
 
     fn cmd_list(&mut self, detailed: bool) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -309,7 +311,7 @@ impl ReplSession {
         let mut output_lines = Vec::new();
         let mut data_list = Vec::new();
 
-        for query in &queries {
+        for query in queries.iter() {
             if detailed {
                 output_lines.push(query.name.clone());
                 output_lines.push(format!(
@@ -357,7 +359,7 @@ impl ReplSession {
 
     fn cmd_show(&mut self, query_name: &str, version_num: Option<u32>) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -442,7 +444,7 @@ impl ReplSession {
         scratch_ttl: Option<u32>,
     ) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -468,7 +470,7 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let runner = crate::Runner::new(client.clone(), queries.clone());
+        let runner = crate::Runner::new(client.clone(), (*queries).clone());
 
         match query_name {
             Some(name) => {
@@ -703,7 +705,7 @@ impl ReplSession {
         skip_invariants: bool,
     ) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -747,7 +749,7 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let runner = crate::Runner::new(client.clone(), queries);
+        let runner = crate::Runner::new(client.clone(), (*queries).clone());
 
         match runner
             .backfill_partitions(query_name, from_key, to_key, None)
@@ -788,7 +790,7 @@ impl ReplSession {
         run_after: bool,
     ) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -945,7 +947,7 @@ impl ReplSession {
         _allow_source_mutation: bool,
     ) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -971,7 +973,7 @@ impl ReplSession {
         };
 
         let stored_states = vec![];
-        let detector = crate::DriftDetector::new(queries, yaml_contents);
+        let detector = crate::DriftDetector::new((*queries).clone(), yaml_contents);
         let report = match detector.detect(&stored_states, from_date, to_date) {
             Ok(r) => r,
             Err(e) => return ReplResult::failure(e.to_string()),
@@ -1016,7 +1018,7 @@ impl ReplSession {
         output: &str,
     ) -> ReplResult {
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
@@ -1026,7 +1028,7 @@ impl ReplSession {
                 .filter(|q| &q.name == name)
                 .cloned()
                 .collect(),
-            None => queries,
+            None => (*queries).clone(),
         };
 
         if queries_to_audit.is_empty() {
@@ -1125,7 +1127,7 @@ impl ReplSession {
         use crate::executor::{ScratchConfig, ScratchWriter};
 
         let queries = match self.ensure_queries() {
-            Ok(q) => q.clone(),
+            Ok(q) => q,
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 

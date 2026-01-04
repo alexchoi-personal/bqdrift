@@ -70,13 +70,10 @@ impl Runner {
 
     pub async fn run_for_partition(&self, partition_key: PartitionKey) -> Result<RunReport> {
         let results: Vec<_> = stream::iter(0..self.queries.len())
-            .map(|idx| {
-                let pk = partition_key.clone();
-                async move {
-                    let query = &self.queries[idx];
-                    let result = self.writer.write_partition(query, pk).await;
-                    (idx, result)
-                }
+            .map(|idx| async move {
+                let query = &self.queries[idx];
+                let result = self.writer.write_partition(query, partition_key).await;
+                (idx, result)
             })
             .buffer_unordered(self.parallelism)
             .collect()
@@ -90,7 +87,7 @@ impl Runner {
                 Ok(s) => stats.push(s),
                 Err(e) => failures.push(RunFailure {
                     query_name: self.queries[idx].name.clone(),
-                    partition_key: partition_key.clone(),
+                    partition_key,
                     error: e.to_string(),
                 }),
             }
@@ -149,7 +146,7 @@ impl Runner {
         let mut partitions = Vec::new();
         let mut current = from;
         while current <= to {
-            partitions.push(current.clone());
+            partitions.push(current);
             current = match interval {
                 Some(i) => current.next_by(i),
                 None => current.next(),
@@ -158,7 +155,7 @@ impl Runner {
 
         let results: Vec<_> = stream::iter(partitions)
             .map(|pk| async move {
-                let result = self.writer.write_partition(query, pk.clone()).await;
+                let result = self.writer.write_partition(query, pk).await;
                 (pk, result)
             })
             .buffer_unordered(self.parallelism)

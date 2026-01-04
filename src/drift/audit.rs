@@ -217,13 +217,13 @@ impl SourceAuditReport {
     }
 
     pub fn by_query(&self) -> HashMap<String, Vec<&SourceAuditEntry>> {
-        let mut grouped: HashMap<String, Vec<&SourceAuditEntry>> = HashMap::new();
+        let mut grouped: HashMap<String, Vec<&SourceAuditEntry>> =
+            HashMap::with_capacity(self.entries.len().min(64));
         for entry in &self.entries {
-            if let Some(vec) = grouped.get_mut(&entry.query_name) {
-                vec.push(entry);
-            } else {
-                grouped.insert(entry.query_name.clone(), vec![entry]);
-            }
+            grouped
+                .entry(entry.query_name.clone())
+                .or_default()
+                .push(entry);
         }
         grouped
     }
@@ -248,13 +248,14 @@ impl<'a> SourceAuditor<'a> {
     pub fn audit(&self, stored_states: &[PartitionState]) -> SourceAuditReport {
         let mut report = SourceAuditReport::new();
 
-        let states_by_query: HashMap<&str, Vec<&PartitionState>> =
-            stored_states.iter().fold(HashMap::new(), |mut acc, state| {
-                acc.entry(state.query_name.as_str())
-                    .or_default()
-                    .push(state);
-                acc
-            });
+        let mut states_by_query: HashMap<&str, Vec<&PartitionState>> =
+            HashMap::with_capacity(stored_states.len().min(64));
+        for state in stored_states {
+            states_by_query
+                .entry(state.query_name.as_str())
+                .or_default()
+                .push(state);
+        }
 
         for query in self.queries {
             let query_states = states_by_query.get(query.name.as_str());
@@ -272,7 +273,7 @@ impl<'a> SourceAuditor<'a> {
         let mut entries = Vec::new();
 
         let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
-            HashMap::new();
+            HashMap::with_capacity(states.len().min(16));
         for state in states {
             states_by_version
                 .entry((state.version, state.sql_revision))

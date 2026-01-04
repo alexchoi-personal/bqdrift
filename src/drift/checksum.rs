@@ -26,9 +26,18 @@ pub struct ExecutionArtifact {
 
 impl Checksums {
     pub fn compute(sql_content: &str, schema: &Schema, yaml_content: &str) -> Self {
+        let schema_json = schema_to_json(schema);
+        Self::compute_with_schema_json(sql_content, &schema_json, yaml_content)
+    }
+
+    pub fn compute_with_schema_json(
+        sql_content: &str,
+        schema_json: &str,
+        yaml_content: &str,
+    ) -> Self {
         Self {
             sql: Self::sha256(sql_content),
-            schema: Self::sha256(&Self::schema_to_json(schema)),
+            schema: Self::sha256(schema_json),
             yaml: Self::sha256(yaml_content),
         }
     }
@@ -48,34 +57,36 @@ impl Checksums {
         let result = hasher.finalize();
         format!("{:x}", result)
     }
+}
 
-    fn schema_to_json(schema: &Schema) -> String {
-        match serde_json::to_string(&schema.fields) {
-            Ok(json) => json,
-            Err(e) => {
-                warn!("Failed to serialize schema to JSON: {}", e);
-                String::new()
-            }
+pub(crate) fn schema_to_json(schema: &Schema) -> String {
+    match serde_json::to_string(&schema.fields) {
+        Ok(json) => json,
+        Err(e) => {
+            warn!("Failed to serialize schema to JSON: {}", e);
+            String::new()
         }
     }
 }
 
 impl ExecutionArtifact {
     pub fn create(sql_content: &str, schema: &Schema, yaml_content: &str) -> Self {
+        let schema_json = schema_to_json(schema);
+        Self::create_with_schema_json(sql_content, &schema_json, yaml_content)
+    }
+
+    pub fn create_with_schema_json(
+        sql_content: &str,
+        schema_json: &str,
+        yaml_content: &str,
+    ) -> Self {
         let sql_compressed = compress_to_base64(sql_content);
-        let schema_json = match serde_json::to_string(&schema.fields) {
-            Ok(json) => json,
-            Err(e) => {
-                warn!("Failed to serialize schema to JSON for artifact: {}", e);
-                String::new()
-            }
-        };
         let yaml_compressed = compress_to_base64(yaml_content);
 
         Self {
             sql_checksum: Checksums::sha256(sql_content),
             sql_compressed,
-            schema_checksum: Checksums::sha256(&schema_json),
+            schema_checksum: Checksums::sha256(schema_json),
             yaml_checksum: Checksums::sha256(yaml_content),
             yaml_compressed,
         }

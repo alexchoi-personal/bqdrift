@@ -284,7 +284,8 @@ impl<'a> SourceAuditor<'a> {
     }
 
     fn audit_query(&self, query: &QueryDef, states: &[&PartitionState]) -> Vec<SourceAuditEntry> {
-        let mut entries = Vec::new();
+        let entry_count: usize = query.versions.iter().map(|v| 1 + v.revisions.len()).sum();
+        let mut entries = Vec::with_capacity(entry_count);
 
         let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
             HashMap::with_capacity(states.len());

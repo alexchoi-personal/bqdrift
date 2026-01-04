@@ -156,8 +156,50 @@ impl<'a> InvariantChecker<'a> {
     }
 
     fn resolve_placeholders(&self, sql: &str) -> String {
-        sql.replace("{destination}", &self.destination_table())
-            .replace("@partition_date", &format!("'{}'", self.partition_date))
+        let dest = self.destination_table();
+        let partition_val = format!("'{}'", self.partition_date);
+
+        let mut result = String::with_capacity(sql.len() + dest.len() + partition_val.len());
+        let mut remaining = sql;
+
+        while !remaining.is_empty() {
+            let dest_pos = remaining.find("{destination}");
+            let part_pos = remaining.find("@partition_date");
+
+            match (dest_pos, part_pos) {
+                (Some(d), Some(p)) if d < p => {
+                    result.push_str(&remaining[..d]);
+                    result.push_str(&dest);
+                    remaining = &remaining[d + "{destination}".len()..];
+                }
+                (Some(d), Some(p)) if p < d => {
+                    result.push_str(&remaining[..p]);
+                    result.push_str(&partition_val);
+                    remaining = &remaining[p + "@partition_date".len()..];
+                }
+                (Some(d), Some(_)) => {
+                    result.push_str(&remaining[..d]);
+                    result.push_str(&dest);
+                    remaining = &remaining[d + "{destination}".len()..];
+                }
+                (Some(d), None) => {
+                    result.push_str(&remaining[..d]);
+                    result.push_str(&dest);
+                    remaining = &remaining[d + "{destination}".len()..];
+                }
+                (None, Some(p)) => {
+                    result.push_str(&remaining[..p]);
+                    result.push_str(&partition_val);
+                    remaining = &remaining[p + "@partition_date".len()..];
+                }
+                (None, None) => {
+                    result.push_str(remaining);
+                    break;
+                }
+            }
+        }
+
+        result
     }
 
     async fn check_row_count(

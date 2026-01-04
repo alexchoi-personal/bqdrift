@@ -12,10 +12,3 @@ pub use runner::{RunFailure, RunReport, Runner};
 pub use scratch::{PromoteStats, ScratchConfig, ScratchWriteStats, ScratchWriter};
 
 pub use bq_executor::{ColumnDef, ColumnInfo, ExecutorWriteStats, QueryResult};
-
-#[doc(hidden)]
-#[allow(deprecated)]
-pub use bq_executor::{
-    create_bigquery_executor, create_mock_executor, Executor, ExecutorMode, ExecutorRunFailure,
-    ExecutorRunReport, ExecutorRunner,
-};

@@ -100,7 +100,8 @@ impl MigrationTracker {
                 .map(|r| r.to_string())
                 .unwrap_or("NULL".to_string()),
             partition_date = run.partition_date,
-            executed_at = run.executed_at.format("%Y-%m-%d %H:%M:%S UTC"),
+            executed_at =
+                escape_sql_string(&run.executed_at.format("%Y-%m-%d %H:%M:%S UTC").to_string()),
             rows = run
                 .rows_written
                 .map(|r| r.to_string())

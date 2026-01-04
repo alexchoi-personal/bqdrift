@@ -24,10 +24,13 @@ impl FileLoader {
     pub fn load_dir(path: impl AsRef<Path>, extension: &str) -> Result<Vec<SqlFile>> {
         let path = path.as_ref();
         let pattern = format!("{}/**/*.{}", path.display(), extension);
-        let mut files = Vec::new();
+        let glob_iter =
+            glob::glob(&pattern).map_err(|e| BqRunnerError::Execution(e.to_string()))?;
+        let (lower, upper) = glob_iter.size_hint();
+        let mut files = Vec::with_capacity(upper.unwrap_or(lower));
         let mut skipped_count = 0;
 
-        for entry in glob::glob(&pattern).map_err(|e| BqRunnerError::Execution(e.to_string()))? {
+        for entry in glob_iter {
             let file_path = match entry {
                 Ok(p) => p,
                 Err(e) => {

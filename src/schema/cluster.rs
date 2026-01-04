@@ -1,5 +1,6 @@
 use crate::error::{BqDriftError, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClusterConfig {
@@ -16,6 +17,12 @@ impl ClusterConfig {
         if fields.iter().any(|f| f.is_empty()) {
             return Err(BqDriftError::Cluster(
                 "Cluster field names cannot be empty".into(),
+            ));
+        }
+        let unique: HashSet<&str> = fields.iter().map(|s| s.as_str()).collect();
+        if unique.len() != fields.len() {
+            return Err(BqDriftError::Cluster(
+                "Cluster field names must be unique".into(),
             ));
         }
         Ok(Self { fields })

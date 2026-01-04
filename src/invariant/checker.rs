@@ -1,14 +1,30 @@
 use super::result::CheckResult;
 use super::types::{InvariantCheck, InvariantDef, InvariantsDef, Severity};
 use crate::dsl::Destination;
-use crate::error::Result;
+use crate::error::{BqDriftError, Result};
 use crate::executor::BqClient;
 use chrono::NaiveDate;
 use futures::future::join_all;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::sync::Arc;
 use tokio::sync::Semaphore;
 
 const MAX_CONCURRENT_CHECKS: usize = 10;
+
+static COLUMN_NAME_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").expect("valid regex"));
+
+fn validate_column_name(column: &str) -> Result<()> {
+    if COLUMN_NAME_RE.is_match(column) {
+        Ok(())
+    } else {
+        Err(BqDriftError::InvariantFailed(format!(
+            "Invalid column name '{}': must match [a-zA-Z_][a-zA-Z0-9_]*",
+            column
+        )))
+    }
+}
 
 pub struct ResolvedInvariant {
     pub name: String,
@@ -249,6 +265,8 @@ impl<'a> InvariantChecker<'a> {
         column: &str,
         max_percentage: f64,
     ) -> Result<CheckResult> {
+        validate_column_name(column)?;
+
         let source = source_sql
             .map(|s| self.resolve_placeholders(s))
             .unwrap_or_else(|| self.default_source_sql());
@@ -292,6 +310,8 @@ impl<'a> InvariantChecker<'a> {
         min: Option<f64>,
         max: Option<f64>,
     ) -> Result<CheckResult> {
+        validate_column_name(column)?;
+
         let source = source_sql
             .map(|s| self.resolve_placeholders(s))
             .unwrap_or_else(|| self.default_source_sql());
@@ -340,6 +360,8 @@ impl<'a> InvariantChecker<'a> {
         min: Option<i64>,
         max: Option<i64>,
     ) -> Result<CheckResult> {
+        validate_column_name(column)?;
+
         let source = source_sql
             .map(|s| self.resolve_placeholders(s))
             .unwrap_or_else(|| self.default_source_sql());

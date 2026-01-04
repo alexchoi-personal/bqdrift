@@ -42,7 +42,7 @@ impl QueryLoader {
             let processed = self.preprocessor.process(&file.content, base_dir)?;
             let raw: RawQueryDef = serde_yaml::from_str(&processed)?;
             let name = raw.name.clone();
-            let query = self.resolve_query(raw, base_dir)?;
+            let query = self.resolve_query(raw)?;
             queries.push(query);
             contents.insert(name, processed);
         }
@@ -73,10 +73,10 @@ impl QueryLoader {
 
         let raw: RawQueryDef = serde_yaml::from_str(&processed)?;
 
-        self.resolve_query(raw, base_dir)
+        self.resolve_query(raw)
     }
 
-    fn resolve_query(&self, mut raw: RawQueryDef, _base_dir: &Path) -> Result<QueryDef> {
+    fn resolve_query(&self, mut raw: RawQueryDef) -> Result<QueryDef> {
         let version_count = raw.versions.len();
         let mut resolved_schemas: HashMap<u32, Schema> = HashMap::with_capacity(version_count);
         let mut resolved_invariants: HashMap<u32, InvariantsDef> =

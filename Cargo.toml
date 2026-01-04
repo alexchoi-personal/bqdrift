@@ -38,6 +38,7 @@ rustyline = "14"
 atty = "0.2"
 dirs = "5"
 uuid = { version = "1", features = ["v4"] }
+rayon = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"

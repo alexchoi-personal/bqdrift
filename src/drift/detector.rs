@@ -4,6 +4,7 @@ use crate::dsl::QueryDef;
 use crate::error::{BqDriftError, Result};
 use crate::schema::PartitionKey;
 use chrono::NaiveDate;
+use rayon::prelude::*;
 use std::collections::HashMap;
 
 const MAX_DETECTION_DAYS: i64 = 365 * 10;
@@ -37,39 +38,48 @@ impl<'a> DriftDetector<'a> {
         }
         let num_days = num_days as usize + 1;
         let estimated_capacity = self.queries.len() * num_days;
-        let mut report = DriftReport::with_capacity(estimated_capacity);
 
-        let mut stored_map: HashMap<(&str, NaiveDate), &PartitionState> =
-            HashMap::with_capacity(stored_states.len());
-        for s in stored_states {
-            stored_map.insert((s.query_name.as_str(), s.partition_date), s);
-        }
+        let stored_map: HashMap<(&str, NaiveDate), &PartitionState> = stored_states
+            .iter()
+            .map(|s| ((s.query_name.as_str(), s.partition_date), s))
+            .collect();
 
-        for (&query_name, &query) in &self.queries {
-            let yaml_content = self
-                .yaml_contents
-                .get(query_name)
-                .map(|s| s.as_str())
-                .unwrap_or("");
+        let partitions: Vec<PartitionDrift> = self
+            .queries
+            .par_iter()
+            .flat_map(|(&query_name, &query)| {
+                let yaml_content = self
+                    .yaml_contents
+                    .get(query_name)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
 
-            let mut checksum_cache: HashMap<u32, Checksums> = HashMap::new();
+                let mut checksum_cache: HashMap<u32, Checksums> = HashMap::new();
+                let mut results = Vec::with_capacity(num_days);
 
-            let mut current = from;
-            while current <= to {
-                let drift = self.detect_partition_cached(
-                    query_name,
-                    query,
-                    current,
-                    stored_map.get(&(query_name, current)),
-                    yaml_content,
-                    &mut checksum_cache,
-                );
-                report.add(drift);
-                match current.succ_opt() {
-                    Some(next) => current = next,
-                    None => break,
+                let mut current = from;
+                while current <= to {
+                    let drift = self.detect_partition_cached(
+                        query_name,
+                        query,
+                        current,
+                        stored_map.get(&(query_name, current)),
+                        yaml_content,
+                        &mut checksum_cache,
+                    );
+                    results.push(drift);
+                    match current.succ_opt() {
+                        Some(next) => current = next,
+                        None => break,
+                    }
                 }
-            }
+                results
+            })
+            .collect();
+
+        let mut report = DriftReport::with_capacity(estimated_capacity);
+        for drift in partitions {
+            report.add(drift);
         }
 
         Ok(report)

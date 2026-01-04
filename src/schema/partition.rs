@@ -26,6 +26,17 @@ pub enum PartitionKey {
 }
 
 impl PartitionKey {
+    fn month_unchecked(year: i32, month: u32) -> Self {
+        debug_assert!(year > 0, "Year must be positive");
+        debug_assert!((1..=12).contains(&month), "Month must be 1-12");
+        PartitionKey::Month { year, month }
+    }
+
+    fn year_unchecked(year: i32) -> Self {
+        debug_assert!(year > 0, "Year must be positive");
+        PartitionKey::Year(year)
+    }
+
     pub fn parse(s: &str, partition_type: &PartitionType) -> Result<Self, String> {
         match partition_type {
             PartitionType::Hour => {
@@ -66,7 +77,7 @@ impl PartitionKey {
                     } else if !(1..=12).contains(&month) {
                         Err(format!("Month must be 1-12, got: {}", month))
                     } else {
-                        Ok(PartitionKey::Month { year, month })
+                        Ok(Self::month_unchecked(year, month))
                     }
                 } else {
                     Err(format!(
@@ -82,7 +93,7 @@ impl PartitionKey {
                     if year <= 0 {
                         Err(format!("Year must be positive, got: {}", year))
                     } else {
-                        Ok(PartitionKey::Year(year))
+                        Ok(Self::year_unchecked(year))
                     }
                 }),
             PartitionType::Range => s
@@ -128,18 +139,12 @@ impl PartitionKey {
             PartitionKey::Day(d) => PartitionKey::Day(d.succ_opt().unwrap_or(NaiveDate::MAX)),
             PartitionKey::Month { year, month } => {
                 if *month == 12 {
-                    PartitionKey::Month {
-                        year: year.saturating_add(1),
-                        month: 1,
-                    }
+                    Self::month_unchecked(year.saturating_add(1), 1)
                 } else {
-                    PartitionKey::Month {
-                        year: *year,
-                        month: month + 1,
-                    }
+                    Self::month_unchecked(*year, month + 1)
                 }
             }
-            PartitionKey::Year(y) => PartitionKey::Year(y.saturating_add(1)),
+            PartitionKey::Year(y) => Self::year_unchecked(y.saturating_add(1)),
             PartitionKey::Range(n) => PartitionKey::Range(n.saturating_add(1)),
         }
     }
@@ -195,11 +200,8 @@ impl PartitionKey {
                 PartitionKey::Hour(hour_dt)
             }
             PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
-            PartitionType::Month => PartitionKey::Month {
-                year: today.year(),
-                month: today.month(),
-            },
-            PartitionType::Year => PartitionKey::Year(today.year()),
+            PartitionType::Month => Self::month_unchecked(today.year(), today.month()),
+            PartitionType::Year => Self::year_unchecked(today.year()),
             PartitionType::Range => PartitionKey::Range(0),
         }
     }

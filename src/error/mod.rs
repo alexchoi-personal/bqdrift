@@ -47,6 +47,9 @@ pub enum BqDriftError {
     #[error("Invariant check failed: {0}")]
     InvariantFailed(String),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("REPL error: {0}")]
     Repl(String),
 

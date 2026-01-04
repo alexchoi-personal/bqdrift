@@ -2,6 +2,7 @@ use super::parser::{ExtendedSchema, SchemaRef};
 use crate::error::{BqDriftError, Result};
 use crate::invariant::{ExtendedInvariants, InvariantDef, InvariantsDef, InvariantsRef};
 use crate::schema::{Field, Schema};
+use tracing::warn;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
@@ -121,10 +122,10 @@ impl VariableResolver {
         inv_ref: &Option<InvariantsRef>,
         resolved_versions: &HashMap<u32, InvariantsDef>,
     ) -> Result<InvariantsDef> {
-        match inv_ref {
-            None => Ok(InvariantsDef::default()),
+        let result = match inv_ref {
+            None => InvariantsDef::default(),
 
-            Some(InvariantsRef::Inline(def)) => Ok(def.clone()),
+            Some(InvariantsRef::Inline(def)) => def.clone(),
 
             Some(InvariantsRef::Reference(ref_str)) => {
                 let version = self.extract_invariants_version_ref(ref_str)?;
@@ -133,13 +134,48 @@ impl VariableResolver {
                         "Invariants for version {} not found or not yet resolved",
                         version
                     ))
-                })
+                })?
             }
 
             Some(InvariantsRef::Extended(ext)) => {
-                self.resolve_extended_invariants(ext, resolved_versions)
+                self.resolve_extended_invariants(ext, resolved_versions)?
+            }
+        };
+
+        self.validate_invariants_def(&result)?;
+        Ok(result)
+    }
+
+    fn validate_invariants_def(&self, def: &InvariantsDef) -> Result<()> {
+        for inv in &def.before {
+            if let Err(msg) = inv.check.validate() {
+                warn!(
+                    invariant = %inv.name,
+                    phase = "before",
+                    error = %msg,
+                    "Invalid invariant check configuration"
+                );
+                return Err(BqDriftError::Validation(format!(
+                    "Invariant '{}' (before): {}",
+                    inv.name, msg
+                )));
             }
         }
+        for inv in &def.after {
+            if let Err(msg) = inv.check.validate() {
+                warn!(
+                    invariant = %inv.name,
+                    phase = "after",
+                    error = %msg,
+                    "Invalid invariant check configuration"
+                );
+                return Err(BqDriftError::Validation(format!(
+                    "Invariant '{}' (after): {}",
+                    inv.name, msg
+                )));
+            }
+        }
+        Ok(())
     }
 
     fn resolve_extended_invariants(

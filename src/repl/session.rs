@@ -9,6 +9,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+const MAX_BACKFILL_PARTITIONS: usize = 3652;
+
 pub struct ReplSession {
     project: Option<String>,
     queries_path: PathBuf,
@@ -90,9 +92,10 @@ impl ReplSession {
     }
 
     pub fn reload_queries(&mut self) -> Result<usize> {
-        let queries = self.loader.load_dir(&self.queries_path)?;
+        let (queries, yaml_contents) = self.loader.load_dir_with_contents(&self.queries_path)?;
         let count = queries.len();
         self.cached_queries = Some(Arc::new(queries));
+        self.cached_yaml_contents = Some(Arc::new(yaml_contents));
         Ok(count)
     }
 
@@ -742,8 +745,16 @@ impl ReplSession {
 
         if dry_run {
             let mut output_lines = Vec::new();
-            let mut current = from_key.clone();
+            let mut current = from_key;
+            let mut count = 0;
             while current <= to_key {
+                count += 1;
+                if count > MAX_BACKFILL_PARTITIONS {
+                    return ReplResult::failure(format!(
+                        "Backfill range too large: exceeds {} partitions",
+                        MAX_BACKFILL_PARTITIONS
+                    ));
+                }
                 let date = current.to_naive_date();
                 if let Some(version) = query.get_version_for_date(date) {
                     output_lines.push(format!(

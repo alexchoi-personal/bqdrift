@@ -108,6 +108,30 @@ pub enum InvariantCheck {
     },
 }
 
+impl InvariantCheck {
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            InvariantCheck::RowCount { min, max, .. } => {
+                if min.is_none() && max.is_none() {
+                    return Err("row_count check requires at least min or max".to_string());
+                }
+            }
+            InvariantCheck::ValueRange { min, max, .. } => {
+                if min.is_none() && max.is_none() {
+                    return Err("value_range check requires at least min or max".to_string());
+                }
+            }
+            InvariantCheck::DistinctCount { min, max, .. } => {
+                if min.is_none() && max.is_none() {
+                    return Err("distinct_count check requires at least min or max".to_string());
+                }
+            }
+            InvariantCheck::NullPercentage { .. } => {}
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Severity {

@@ -26,7 +26,9 @@ impl<'a> DriftDetector<'a> {
         from: NaiveDate,
         to: NaiveDate,
     ) -> Result<DriftReport> {
-        let mut report = DriftReport::new();
+        let num_days = (to - from).num_days().max(0) as usize + 1;
+        let estimated_capacity = self.queries.len() * num_days;
+        let mut report = DriftReport::with_capacity(estimated_capacity);
 
         let mut stored_map: HashMap<(&str, NaiveDate), &PartitionState> =
             HashMap::with_capacity(stored_states.len());

@@ -86,6 +86,12 @@ impl DriftReport {
         Self::default()
     }
 
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            partitions: Vec::with_capacity(capacity),
+        }
+    }
+
     pub fn add(&mut self, drift: PartitionDrift) {
         self.partitions.push(drift);
     }

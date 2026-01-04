@@ -143,11 +143,13 @@ impl QueryValidator {
     }
 
     fn check_effective_from_order(query: &QueryDef, warnings: &mut Vec<ValidationWarning>) {
-        let mut sorted = query.versions.clone();
-        sorted.sort_by_key(|v| v.version);
+        let mut indices: Vec<usize> = (0..query.versions.len()).collect();
+        indices.sort_by_key(|&i| query.versions[i].version);
 
-        for window in sorted.windows(2) {
-            let [prev, curr] = window else { continue };
+        for window in indices.windows(2) {
+            let [prev_idx, curr_idx] = [window[0], window[1]];
+            let prev = &query.versions[prev_idx];
+            let curr = &query.versions[curr_idx];
             if curr.effective_from < prev.effective_from {
                 warnings.push(ValidationWarning {
                     code: "W001",
@@ -178,11 +180,13 @@ impl QueryValidator {
     }
 
     fn check_schema_breaking_changes(query: &QueryDef, warnings: &mut Vec<ValidationWarning>) {
-        let mut sorted = query.versions.clone();
-        sorted.sort_by_key(|v| v.version);
+        let mut indices: Vec<usize> = (0..query.versions.len()).collect();
+        indices.sort_by_key(|&i| query.versions[i].version);
 
-        for window in sorted.windows(2) {
-            let [prev, curr] = window else { continue };
+        for window in indices.windows(2) {
+            let [prev_idx, curr_idx] = [window[0], window[1]];
+            let prev = &query.versions[prev_idx];
+            let curr = &query.versions[curr_idx];
 
             for field in &prev.schema.fields {
                 if !curr.schema.has_field(&field.name) {
@@ -196,7 +200,6 @@ impl QueryValidator {
                 }
             }
 
-            // Check for type changes
             for prev_field in &prev.schema.fields {
                 if let Some(curr_field) = curr.schema.get_field(&prev_field.name) {
                     if prev_field.field_type != curr_field.field_type {

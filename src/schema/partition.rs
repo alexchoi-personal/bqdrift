@@ -181,6 +181,28 @@ impl PartitionKey {
             PartitionKey::Range(_) => PartitionType::Range,
         }
     }
+
+    pub fn default_for_type(partition_type: &PartitionType) -> Self {
+        use chrono::{Datelike, Timelike, Utc};
+        let today = Utc::now().date_naive();
+        match partition_type {
+            PartitionType::Hour => {
+                let now = Utc::now().naive_utc();
+                let hour_dt = now
+                    .date()
+                    .and_hms_opt(now.time().hour(), 0, 0)
+                    .unwrap_or(now);
+                PartitionKey::Hour(hour_dt)
+            }
+            PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
+            PartitionType::Month => PartitionKey::Month {
+                year: today.year(),
+                month: today.month(),
+            },
+            PartitionType::Year => PartitionKey::Year(today.year()),
+            PartitionType::Range => PartitionKey::Range(0),
+        }
+    }
 }
 
 impl fmt::Display for PartitionKey {

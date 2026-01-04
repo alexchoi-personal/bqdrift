@@ -4,7 +4,7 @@ use crate::error::{BqDriftError, Result};
 use crate::executor::BqClient;
 use crate::invariant::{resolve_invariants_def, CheckStatus, InvariantChecker, Severity};
 use crate::schema::{PartitionKey, PartitionType};
-use chrono::{Datelike, NaiveDate, Timelike, Utc};
+use chrono::{NaiveDate, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -1202,23 +1202,6 @@ impl ReplSession {
     }
 
     fn default_partition_key(partition_type: &PartitionType) -> PartitionKey {
-        let today = Utc::now().date_naive();
-        match partition_type {
-            PartitionType::Hour => {
-                let now = Utc::now().naive_utc();
-                let hour_dt = now
-                    .date()
-                    .and_hms_opt(now.time().hour(), 0, 0)
-                    .unwrap_or(now);
-                PartitionKey::Hour(hour_dt)
-            }
-            PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
-            PartitionType::Month => PartitionKey::Month {
-                year: today.year(),
-                month: today.month(),
-            },
-            PartitionType::Year => PartitionKey::Year(today.year()),
-            PartitionType::Range => PartitionKey::Range(0),
-        }
+        PartitionKey::default_for_type(partition_type)
     }
 }

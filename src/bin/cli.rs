@@ -1,4 +1,4 @@
-use chrono::{Datelike, NaiveDate, Timelike};
+use chrono::NaiveDate;
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -298,24 +298,7 @@ fn parse_partition_key(
 }
 
 fn default_partition_key(partition_type: &PartitionType) -> PartitionKey {
-    let today = chrono::Utc::now().date_naive();
-    match partition_type {
-        PartitionType::Hour => {
-            let now = chrono::Utc::now().naive_utc();
-            let hour_dt = now
-                .date()
-                .and_hms_opt(now.time().hour(), 0, 0)
-                .unwrap_or(now);
-            PartitionKey::Hour(hour_dt)
-        }
-        PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
-        PartitionType::Month => PartitionKey::Month {
-            year: today.year(),
-            month: today.month(),
-        },
-        PartitionType::Year => PartitionKey::Year(today.year()),
-        PartitionType::Range => PartitionKey::Range(0),
-    }
+    PartitionKey::default_for_type(partition_type)
 }
 
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {

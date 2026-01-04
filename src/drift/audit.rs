@@ -150,6 +150,13 @@ impl SourceStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct SourceAuditSummary {
+    pub modified: usize,
+    pub current: usize,
+    pub never_executed: usize,
+}
+
 #[derive(Debug, Default)]
 pub struct SourceAuditReport {
     pub entries: Vec<SourceAuditEntry>,
@@ -189,6 +196,24 @@ impl SourceAuditReport {
             .iter()
             .filter(|e| e.status == SourceStatus::NeverExecuted)
             .count()
+    }
+
+    pub fn summary(&self) -> SourceAuditSummary {
+        let mut modified = 0;
+        let mut current = 0;
+        let mut never_executed = 0;
+        for entry in &self.entries {
+            match entry.status {
+                SourceStatus::Modified => modified += 1,
+                SourceStatus::Current => current += 1,
+                SourceStatus::NeverExecuted => never_executed += 1,
+            }
+        }
+        SourceAuditSummary {
+            modified,
+            current,
+            never_executed,
+        }
     }
 
     pub fn by_query(&self) -> HashMap<String, Vec<&SourceAuditEntry>> {

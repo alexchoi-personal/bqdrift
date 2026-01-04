@@ -90,16 +90,9 @@ impl DriftDetector {
                         stored.executed_sql_b64.clone(),
                     )
                 } else {
-                    let current_checksums = checksum_cache
-                        .entry(v.version)
-                        .or_insert_with(|| {
-                            Checksums::from_version(
-                                v,
-                                yaml_content,
-                                chrono::Utc::now().date_naive(),
-                            )
-                        })
-                        .clone();
+                    let current_checksums = checksum_cache.entry(v.version).or_insert_with(|| {
+                        Checksums::from_version(v, yaml_content, chrono::Utc::now().date_naive())
+                    });
 
                     if current_checksums.schema != stored.schema_checksum {
                         (

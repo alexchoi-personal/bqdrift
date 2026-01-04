@@ -13,7 +13,6 @@ use gcp_bigquery_client::model::table_field_schema::TableFieldSchema;
 use gcp_bigquery_client::model::table_schema::TableSchema;
 use gcp_bigquery_client::model::time_partitioning::TimePartitioning;
 use gcp_bigquery_client::Client;
-use tracing::warn;
 
 #[derive(Clone)]
 pub struct BqClient {
@@ -228,8 +227,9 @@ impl BqClient {
             }
         }
 
-        warn!("query_row_count returned no valid integer value, defaulting to 0");
-        Ok(0)
+        Err(BqDriftError::Schema(
+            "query_row_count returned no valid integer value".to_string(),
+        ))
     }
 
     /// Execute a query and return a single float value from the first column of the first row.

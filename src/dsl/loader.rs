@@ -70,7 +70,8 @@ impl QueryLoader {
     fn resolve_query(&self, mut raw: RawQueryDef, _base_dir: &Path) -> Result<QueryDef> {
         let version_count = raw.versions.len();
         let mut resolved_schemas: HashMap<u32, Schema> = HashMap::with_capacity(version_count);
-        let mut resolved_invariants: HashMap<u32, InvariantsDef> = HashMap::with_capacity(version_count);
+        let mut resolved_invariants: HashMap<u32, InvariantsDef> =
+            HashMap::with_capacity(version_count);
         let mut versions: Vec<VersionDef> = Vec::with_capacity(version_count);
 
         raw.versions.sort_by(|a, b| {

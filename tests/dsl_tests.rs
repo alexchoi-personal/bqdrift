@@ -1,6 +1,6 @@
 use bqdrift::dsl::QueryLoader;
-use bqdrift::{BqType, Severity};
 use bqdrift::invariant::InvariantCheck;
+use bqdrift::{BqType, Severity};
 use chrono::NaiveDate;
 use std::path::Path;
 
@@ -27,7 +27,9 @@ fn test_load_simple_query() {
 #[test]
 fn test_load_simple_query_schema() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/simple_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/simple_query.yaml"))
+        .unwrap();
 
     assert_eq!(query.versions.len(), 1);
     let v1 = &query.versions[0];
@@ -41,7 +43,9 @@ fn test_load_simple_query_schema() {
 #[test]
 fn test_load_simple_query_sql() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/simple_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/simple_query.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
     assert!(v1.sql_content.contains("SELECT"));
@@ -51,7 +55,9 @@ fn test_load_simple_query_sql() {
 #[test]
 fn test_load_simple_query_partition() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/simple_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/simple_query.yaml"))
+        .unwrap();
 
     assert_eq!(query.destination.partition.field, Some("date".to_string()));
 }
@@ -59,7 +65,9 @@ fn test_load_simple_query_partition() {
 #[test]
 fn test_load_simple_query_cluster() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/simple_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/simple_query.yaml"))
+        .unwrap();
 
     assert!(query.cluster.is_some());
     assert_eq!(query.cluster.as_ref().unwrap().fields, vec!["region"]);
@@ -78,7 +86,9 @@ fn test_load_versioned_query() {
 #[test]
 fn test_versioned_query_schema_reference() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
     let v2 = &query.versions[1];
@@ -90,7 +100,9 @@ fn test_versioned_query_schema_reference() {
 #[test]
 fn test_versioned_query_schema_extension() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
     let v3 = &query.versions[2];
@@ -103,7 +115,9 @@ fn test_versioned_query_schema_extension() {
 #[test]
 fn test_versioned_query_revisions() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
     assert_eq!(v2.revisions.len(), 1);
@@ -117,7 +131,9 @@ fn test_versioned_query_revisions() {
 #[test]
 fn test_get_version_for_date() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let date_v1 = NaiveDate::from_ymd_opt(2024, 2, 15).unwrap();
     let version = query.get_version_for_date(date_v1);
@@ -138,7 +154,9 @@ fn test_get_version_for_date() {
 #[test]
 fn test_get_version_for_date_before_first() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let date_before = NaiveDate::from_ymd_opt(2023, 12, 1).unwrap();
     let version = query.get_version_for_date(date_before);
@@ -148,7 +166,9 @@ fn test_get_version_for_date_before_first() {
 #[test]
 fn test_get_sql_for_date_with_revision() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
 
@@ -164,7 +184,9 @@ fn test_get_sql_for_date_with_revision() {
 #[test]
 fn test_latest_version() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let latest = query.latest_version();
     assert!(latest.is_some());
@@ -191,7 +213,9 @@ fn test_load_nonexistent_yaml() {
 #[test]
 fn test_effective_from_dates() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     assert_eq!(
         query.versions[0].effective_from,
@@ -210,7 +234,9 @@ fn test_effective_from_dates() {
 #[test]
 fn test_versioned_query_schema_modify() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/versioned_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/versioned_query.yaml"))
+        .unwrap();
 
     let v3 = &query.versions[2];
     let v4 = &query.versions[3];
@@ -234,13 +260,18 @@ fn test_versioned_query_schema_modify() {
 #[test]
 fn test_sql_dependencies_auto_extracted() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/simple_query.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/simple_query.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
     // Dependencies should be auto-extracted from SQL
     assert!(!v1.dependencies.is_empty());
     // Should contain raw.events table from the SQL
-    assert!(v1.dependencies.iter().any(|d| d.contains("raw.events") || d.contains("events")));
+    assert!(v1
+        .dependencies
+        .iter()
+        .any(|d| d.contains("raw.events") || d.contains("events")));
 }
 
 #[test]
@@ -257,7 +288,9 @@ fn test_load_query_with_invariants() {
 #[test]
 fn test_invariants_v1_before_checks() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
     assert_eq!(v1.invariants.before.len(), 1);
@@ -276,12 +309,19 @@ fn test_invariants_v1_before_checks() {
 #[test]
 fn test_invariants_v1_after_checks() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
     assert_eq!(v1.invariants.after.len(), 4);
 
-    let names: Vec<_> = v1.invariants.after.iter().map(|i| i.name.as_str()).collect();
+    let names: Vec<_> = v1
+        .invariants
+        .after
+        .iter()
+        .map(|i| i.name.as_str())
+        .collect();
     assert!(names.contains(&"min_rows"));
     assert!(names.contains(&"null_check"));
     assert!(names.contains(&"count_positive"));
@@ -291,10 +331,17 @@ fn test_invariants_v1_after_checks() {
 #[test]
 fn test_invariants_row_count_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
-    let min_rows = v1.invariants.after.iter().find(|i| i.name == "min_rows").unwrap();
+    let min_rows = v1
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "min_rows")
+        .unwrap();
 
     match &min_rows.check {
         InvariantCheck::RowCount { min, max, .. } => {
@@ -308,14 +355,25 @@ fn test_invariants_row_count_check() {
 #[test]
 fn test_invariants_null_percentage_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
-    let null_check = v1.invariants.after.iter().find(|i| i.name == "null_check").unwrap();
+    let null_check = v1
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "null_check")
+        .unwrap();
 
     assert_eq!(null_check.severity, Severity::Warning);
     match &null_check.check {
-        InvariantCheck::NullPercentage { column, max_percentage, .. } => {
+        InvariantCheck::NullPercentage {
+            column,
+            max_percentage,
+            ..
+        } => {
             assert_eq!(column, "region");
             assert!((max_percentage - 5.0).abs() < 0.001);
         }
@@ -326,13 +384,22 @@ fn test_invariants_null_percentage_check() {
 #[test]
 fn test_invariants_value_range_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
-    let count_positive = v1.invariants.after.iter().find(|i| i.name == "count_positive").unwrap();
+    let count_positive = v1
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "count_positive")
+        .unwrap();
 
     match &count_positive.check {
-        InvariantCheck::ValueRange { column, min, max, .. } => {
+        InvariantCheck::ValueRange {
+            column, min, max, ..
+        } => {
             assert_eq!(column, "count");
             assert_eq!(*min, Some(0.0));
             assert_eq!(*max, None);
@@ -344,13 +411,22 @@ fn test_invariants_value_range_check() {
 #[test]
 fn test_invariants_distinct_count_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v1 = &query.versions[0];
-    let cardinality = v1.invariants.after.iter().find(|i| i.name == "region_cardinality").unwrap();
+    let cardinality = v1
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "region_cardinality")
+        .unwrap();
 
     match &cardinality.check {
-        InvariantCheck::DistinctCount { column, min, max, .. } => {
+        InvariantCheck::DistinctCount {
+            column, min, max, ..
+        } => {
             assert_eq!(column, "region");
             assert_eq!(*min, Some(1));
             assert_eq!(*max, Some(100));
@@ -362,7 +438,9 @@ fn test_invariants_distinct_count_check() {
 #[test]
 fn test_invariants_v2_extended() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
 
@@ -372,7 +450,12 @@ fn test_invariants_v2_extended() {
     // After checks: 4 from v1 - 1 removed (null_check) + 1 added (new_check) = 4
     assert_eq!(v2.invariants.after.len(), 4);
 
-    let names: Vec<_> = v2.invariants.after.iter().map(|i| i.name.as_str()).collect();
+    let names: Vec<_> = v2
+        .invariants
+        .after
+        .iter()
+        .map(|i| i.name.as_str())
+        .collect();
     assert!(names.contains(&"min_rows"));
     assert!(names.contains(&"count_positive"));
     assert!(names.contains(&"region_cardinality"));
@@ -383,10 +466,17 @@ fn test_invariants_v2_extended() {
 #[test]
 fn test_invariants_v2_modified_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
-    let min_rows = v2.invariants.after.iter().find(|i| i.name == "min_rows").unwrap();
+    let min_rows = v2
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "min_rows")
+        .unwrap();
 
     match &min_rows.check {
         InvariantCheck::RowCount { min, .. } => {
@@ -399,10 +489,17 @@ fn test_invariants_v2_modified_check() {
 #[test]
 fn test_invariants_v2_added_check() {
     let loader = QueryLoader::new();
-    let query = loader.load_query(fixtures_path().join("analytics/query_with_invariants.yaml")).unwrap();
+    let query = loader
+        .load_query(fixtures_path().join("analytics/query_with_invariants.yaml"))
+        .unwrap();
 
     let v2 = &query.versions[1];
-    let new_check = v2.invariants.after.iter().find(|i| i.name == "new_check").unwrap();
+    let new_check = v2
+        .invariants
+        .after
+        .iter()
+        .find(|i| i.name == "new_check")
+        .unwrap();
 
     assert_eq!(new_check.severity, Severity::Warning);
     match &new_check.check {

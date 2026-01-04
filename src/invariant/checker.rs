@@ -1,9 +1,10 @@
-use chrono::NaiveDate;
-use crate::error::Result;
-use crate::dsl::Destination;
-use crate::executor::BqClient;
-use super::types::{Severity, InvariantsDef, InvariantDef, InvariantCheck};
 use super::result::CheckResult;
+use super::types::{InvariantCheck, InvariantDef, InvariantsDef, Severity};
+use crate::dsl::Destination;
+use crate::error::Result;
+use crate::executor::BqClient;
+use chrono::NaiveDate;
+use futures::future::join_all;
 
 pub struct ResolvedInvariant {
     pub name: String,
@@ -57,29 +58,68 @@ impl<'a> InvariantChecker<'a> {
     }
 
     pub async fn run_checks(&self, invariants: &[ResolvedInvariant]) -> Result<Vec<CheckResult>> {
-        let mut results = Vec::new();
+        let futures: Vec<_> = invariants.iter().map(|inv| self.run_check(inv)).collect();
 
-        for inv in invariants {
-            let result = self.run_check(inv).await?;
-            results.push(result);
-        }
+        let results: Vec<Result<CheckResult>> = join_all(futures).await;
 
-        Ok(results)
+        results.into_iter().collect()
     }
 
     async fn run_check(&self, inv: &ResolvedInvariant) -> Result<CheckResult> {
         match &inv.check {
-            ResolvedCheck::RowCount { source_sql, min, max } => {
-                self.check_row_count(&inv.name, inv.severity, source_sql.as_deref(), *min, *max).await
+            ResolvedCheck::RowCount {
+                source_sql,
+                min,
+                max,
+            } => {
+                self.check_row_count(&inv.name, inv.severity, source_sql.as_deref(), *min, *max)
+                    .await
             }
-            ResolvedCheck::NullPercentage { source_sql, column, max_percentage } => {
-                self.check_null_percentage(&inv.name, inv.severity, source_sql.as_deref(), column, *max_percentage).await
+            ResolvedCheck::NullPercentage {
+                source_sql,
+                column,
+                max_percentage,
+            } => {
+                self.check_null_percentage(
+                    &inv.name,
+                    inv.severity,
+                    source_sql.as_deref(),
+                    column,
+                    *max_percentage,
+                )
+                .await
             }
-            ResolvedCheck::ValueRange { source_sql, column, min, max } => {
-                self.check_value_range(&inv.name, inv.severity, source_sql.as_deref(), column, *min, *max).await
+            ResolvedCheck::ValueRange {
+                source_sql,
+                column,
+                min,
+                max,
+            } => {
+                self.check_value_range(
+                    &inv.name,
+                    inv.severity,
+                    source_sql.as_deref(),
+                    column,
+                    *min,
+                    *max,
+                )
+                .await
             }
-            ResolvedCheck::DistinctCount { source_sql, column, min, max } => {
-                self.check_distinct_count(&inv.name, inv.severity, source_sql.as_deref(), column, *min, *max).await
+            ResolvedCheck::DistinctCount {
+                source_sql,
+                column,
+                min,
+                max,
+            } => {
+                self.check_distinct_count(
+                    &inv.name,
+                    inv.severity,
+                    source_sql.as_deref(),
+                    column,
+                    *min,
+                    *max,
+                )
+                .await
             }
         }
     }
@@ -89,7 +129,12 @@ impl<'a> InvariantChecker<'a> {
     }
 
     fn default_source_sql(&self) -> String {
-        let partition_field = self.destination.partition.field.as_deref().unwrap_or("date");
+        let partition_field = self
+            .destination
+            .partition
+            .field
+            .as_deref()
+            .unwrap_or("date");
         format!(
             "SELECT * FROM {} WHERE {} = '{}'",
             self.destination_table(),
@@ -100,7 +145,7 @@ impl<'a> InvariantChecker<'a> {
 
     fn resolve_placeholders(&self, sql: &str) -> String {
         sql.replace("{destination}", &self.destination_table())
-           .replace("@partition_date", &format!("'{}'", self.partition_date))
+            .replace("@partition_date", &format!("'{}'", self.partition_date))
     }
 
     async fn check_row_count(
@@ -131,7 +176,11 @@ impl<'a> InvariantChecker<'a> {
         }
 
         if violations.is_empty() {
-            Ok(CheckResult::passed(name, severity, format!("Row count: {}", count)))
+            Ok(CheckResult::passed(
+                name,
+                severity,
+                format!("Row count: {}", count),
+            ))
         } else {
             Ok(CheckResult::failed(name, severity, violations.join(", "))
                 .with_details(format!("Actual row count: {}", count)))
@@ -155,16 +204,28 @@ impl<'a> InvariantChecker<'a> {
             column, source
         );
 
-        let null_pct = self.client.query_single_float(&check_sql).await?.unwrap_or(0.0);
+        let null_pct = self
+            .client
+            .query_single_float(&check_sql)
+            .await?
+            .unwrap_or(0.0);
 
         if null_pct <= max_percentage {
-            Ok(CheckResult::passed(name, severity, format!("Null percentage: {:.2}%", null_pct)))
+            Ok(CheckResult::passed(
+                name,
+                severity,
+                format!("Null percentage: {:.2}%", null_pct),
+            ))
         } else {
             Ok(CheckResult::failed(
                 name,
                 severity,
-                format!("Null percentage {:.2}% > max {:.2}%", null_pct, max_percentage),
-            ).with_details(format!("Column: {}, Actual: {:.2}%", column, null_pct)))
+                format!(
+                    "Null percentage {:.2}% > max {:.2}%",
+                    null_pct, max_percentage
+                ),
+            )
+            .with_details(format!("Column: {}, Actual: {:.2}%", column, null_pct)))
         }
     }
 
@@ -201,10 +262,18 @@ impl<'a> InvariantChecker<'a> {
         }
 
         if violations.is_empty() {
-            Ok(CheckResult::passed(name, severity, format!("Value range for {}: [{:?}, {:?}]", column, min_val, max_val)))
+            Ok(CheckResult::passed(
+                name,
+                severity,
+                format!("Value range for {}: [{:?}, {:?}]", column, min_val, max_val),
+            ))
         } else {
-            Ok(CheckResult::failed(name, severity, violations.join(", "))
-                .with_details(format!("Column: {}, Actual range: [{:?}, {:?}]", column, min_val, max_val)))
+            Ok(
+                CheckResult::failed(name, severity, violations.join(", ")).with_details(format!(
+                    "Column: {}, Actual range: [{:?}, {:?}]",
+                    column, min_val, max_val
+                )),
+            )
         }
     }
 
@@ -241,15 +310,25 @@ impl<'a> InvariantChecker<'a> {
         }
 
         if violations.is_empty() {
-            Ok(CheckResult::passed(name, severity, format!("Distinct count for {}: {}", column, count)))
+            Ok(CheckResult::passed(
+                name,
+                severity,
+                format!("Distinct count for {}: {}", column, count),
+            ))
         } else {
-            Ok(CheckResult::failed(name, severity, violations.join(", "))
-                .with_details(format!("Column: {}, Actual distinct count: {}", column, count)))
+            Ok(
+                CheckResult::failed(name, severity, violations.join(", ")).with_details(format!(
+                    "Column: {}, Actual distinct count: {}",
+                    column, count
+                )),
+            )
         }
     }
 }
 
-pub fn resolve_invariants_def(def: &InvariantsDef) -> (Vec<ResolvedInvariant>, Vec<ResolvedInvariant>) {
+pub fn resolve_invariants_def(
+    def: &InvariantsDef,
+) -> (Vec<ResolvedInvariant>, Vec<ResolvedInvariant>) {
     let before = def.before.iter().map(resolve_invariant_def).collect();
     let after = def.after.iter().map(resolve_invariant_def).collect();
     (before, after)
@@ -266,35 +345,41 @@ fn resolve_invariant_def(inv: &InvariantDef) -> ResolvedInvariant {
 
 fn resolve_check(check: &InvariantCheck) -> ResolvedCheck {
     match check {
-        InvariantCheck::RowCount { source, min, max } => {
-            ResolvedCheck::RowCount {
-                source_sql: source.clone(),
-                min: *min,
-                max: *max,
-            }
-        }
-        InvariantCheck::NullPercentage { source, column, max_percentage } => {
-            ResolvedCheck::NullPercentage {
-                source_sql: source.clone(),
-                column: column.clone(),
-                max_percentage: *max_percentage,
-            }
-        }
-        InvariantCheck::ValueRange { source, column, min, max } => {
-            ResolvedCheck::ValueRange {
-                source_sql: source.clone(),
-                column: column.clone(),
-                min: *min,
-                max: *max,
-            }
-        }
-        InvariantCheck::DistinctCount { source, column, min, max } => {
-            ResolvedCheck::DistinctCount {
-                source_sql: source.clone(),
-                column: column.clone(),
-                min: *min,
-                max: *max,
-            }
-        }
+        InvariantCheck::RowCount { source, min, max } => ResolvedCheck::RowCount {
+            source_sql: source.clone(),
+            min: *min,
+            max: *max,
+        },
+        InvariantCheck::NullPercentage {
+            source,
+            column,
+            max_percentage,
+        } => ResolvedCheck::NullPercentage {
+            source_sql: source.clone(),
+            column: column.clone(),
+            max_percentage: *max_percentage,
+        },
+        InvariantCheck::ValueRange {
+            source,
+            column,
+            min,
+            max,
+        } => ResolvedCheck::ValueRange {
+            source_sql: source.clone(),
+            column: column.clone(),
+            min: *min,
+            max: *max,
+        },
+        InvariantCheck::DistinctCount {
+            source,
+            column,
+            min,
+            max,
+        } => ResolvedCheck::DistinctCount {
+            source_sql: source.clone(),
+            column: column.clone(),
+            min: *min,
+            max: *max,
+        },
     }
 }

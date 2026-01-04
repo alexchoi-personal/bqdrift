@@ -1,7 +1,7 @@
+use crate::schema::PartitionKey;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::schema::PartitionKey;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PartitionState {
@@ -113,11 +113,16 @@ impl DriftReport {
     }
 
     pub fn needs_rerun(&self) -> Vec<&PartitionDrift> {
-        self.partitions.iter().filter(|p| p.state.needs_rerun()).collect()
+        self.partitions
+            .iter()
+            .filter(|p| p.state.needs_rerun())
+            .collect()
     }
 
     pub fn is_current(&self) -> bool {
-        self.partitions.iter().all(|p| p.state == DriftState::Current)
+        self.partitions
+            .iter()
+            .all(|p| p.state == DriftState::Current)
     }
 
     pub fn summary(&self) -> HashMap<DriftState, usize> {

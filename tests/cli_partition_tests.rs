@@ -4,7 +4,10 @@ use chrono::{NaiveDate, NaiveDateTime};
 #[test]
 fn test_parse_day_partition() {
     let key = PartitionKey::parse("2024-06-15", &PartitionType::Day).unwrap();
-    assert_eq!(key, PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap()));
+    assert_eq!(
+        key,
+        PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap())
+    );
 }
 
 #[test]
@@ -16,14 +19,16 @@ fn test_parse_day_partition_invalid() {
 #[test]
 fn test_parse_hour_partition_full() {
     let key = PartitionKey::parse("2024-06-15T10:00:00", &PartitionType::Hour).unwrap();
-    let expected = NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let expected =
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     assert_eq!(key, PartitionKey::Hour(expected));
 }
 
 #[test]
 fn test_parse_hour_partition_short() {
     let key = PartitionKey::parse("2024-06-15T10", &PartitionType::Hour).unwrap();
-    let expected = NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let expected =
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     assert_eq!(key, PartitionKey::Hour(expected));
 }
 
@@ -36,7 +41,13 @@ fn test_parse_hour_partition_invalid() {
 #[test]
 fn test_parse_month_partition() {
     let key = PartitionKey::parse("2024-06", &PartitionType::Month).unwrap();
-    assert_eq!(key, PartitionKey::Month { year: 2024, month: 6 });
+    assert_eq!(
+        key,
+        PartitionKey::Month {
+            year: 2024,
+            month: 6
+        }
+    );
 }
 
 #[test]
@@ -100,8 +111,14 @@ fn test_partition_key_iteration_day() {
 
 #[test]
 fn test_partition_key_iteration_month() {
-    let start = PartitionKey::Month { year: 2024, month: 10 };
-    let end = PartitionKey::Month { year: 2025, month: 2 };
+    let start = PartitionKey::Month {
+        year: 2024,
+        month: 10,
+    };
+    let end = PartitionKey::Month {
+        year: 2025,
+        month: 2,
+    };
 
     let mut partitions = Vec::new();
     let mut current = start.clone();
@@ -111,11 +128,41 @@ fn test_partition_key_iteration_month() {
     }
 
     assert_eq!(partitions.len(), 5);
-    assert_eq!(partitions[0], PartitionKey::Month { year: 2024, month: 10 });
-    assert_eq!(partitions[1], PartitionKey::Month { year: 2024, month: 11 });
-    assert_eq!(partitions[2], PartitionKey::Month { year: 2024, month: 12 });
-    assert_eq!(partitions[3], PartitionKey::Month { year: 2025, month: 1 });
-    assert_eq!(partitions[4], PartitionKey::Month { year: 2025, month: 2 });
+    assert_eq!(
+        partitions[0],
+        PartitionKey::Month {
+            year: 2024,
+            month: 10
+        }
+    );
+    assert_eq!(
+        partitions[1],
+        PartitionKey::Month {
+            year: 2024,
+            month: 11
+        }
+    );
+    assert_eq!(
+        partitions[2],
+        PartitionKey::Month {
+            year: 2024,
+            month: 12
+        }
+    );
+    assert_eq!(
+        partitions[3],
+        PartitionKey::Month {
+            year: 2025,
+            month: 1
+        }
+    );
+    assert_eq!(
+        partitions[4],
+        PartitionKey::Month {
+            year: 2025,
+            month: 2
+        }
+    );
 }
 
 #[test]
@@ -137,22 +184,44 @@ fn test_partition_key_iteration_year() {
 
 #[test]
 fn test_partition_key_to_naive_date() {
-    let hour = PartitionKey::Hour(NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap());
+    let hour = PartitionKey::Hour(
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     let day = PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    let month = PartitionKey::Month { year: 2024, month: 6 };
+    let month = PartitionKey::Month {
+        year: 2024,
+        month: 6,
+    };
     let year = PartitionKey::Year(2024);
 
-    assert_eq!(hour.to_naive_date(), NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    assert_eq!(day.to_naive_date(), NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    assert_eq!(month.to_naive_date(), NaiveDate::from_ymd_opt(2024, 6, 1).unwrap());
-    assert_eq!(year.to_naive_date(), NaiveDate::from_ymd_opt(2024, 1, 1).unwrap());
+    assert_eq!(
+        hour.to_naive_date(),
+        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap()
+    );
+    assert_eq!(
+        day.to_naive_date(),
+        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap()
+    );
+    assert_eq!(
+        month.to_naive_date(),
+        NaiveDate::from_ymd_opt(2024, 6, 1).unwrap()
+    );
+    assert_eq!(
+        year.to_naive_date(),
+        NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()
+    );
 }
 
 #[test]
 fn test_partition_key_decorator() {
-    let hour = PartitionKey::Hour(NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap());
+    let hour = PartitionKey::Hour(
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     let day = PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    let month = PartitionKey::Month { year: 2024, month: 6 };
+    let month = PartitionKey::Month {
+        year: 2024,
+        month: 6,
+    };
     let year = PartitionKey::Year(2024);
     let range = PartitionKey::Range(12345);
 
@@ -165,9 +234,14 @@ fn test_partition_key_decorator() {
 
 #[test]
 fn test_partition_key_sql_literal() {
-    let hour = PartitionKey::Hour(NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap());
+    let hour = PartitionKey::Hour(
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     let day = PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    let month = PartitionKey::Month { year: 2024, month: 6 };
+    let month = PartitionKey::Month {
+        year: 2024,
+        month: 6,
+    };
     let year = PartitionKey::Year(2024);
     let range = PartitionKey::Range(12345);
 
@@ -180,9 +254,14 @@ fn test_partition_key_sql_literal() {
 
 #[test]
 fn test_partition_key_display() {
-    let hour = PartitionKey::Hour(NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap());
+    let hour = PartitionKey::Hour(
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     let day = PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    let month = PartitionKey::Month { year: 2024, month: 6 };
+    let month = PartitionKey::Month {
+        year: 2024,
+        month: 6,
+    };
     let year = PartitionKey::Year(2024);
     let range = PartitionKey::Range(12345);
 
@@ -195,9 +274,14 @@ fn test_partition_key_display() {
 
 #[test]
 fn test_partition_key_type_detection() {
-    let hour = PartitionKey::Hour(NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap());
+    let hour = PartitionKey::Hour(
+        NaiveDateTime::parse_from_str("2024-06-15 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+    );
     let day = PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap());
-    let month = PartitionKey::Month { year: 2024, month: 6 };
+    let month = PartitionKey::Month {
+        year: 2024,
+        month: 6,
+    };
     let year = PartitionKey::Year(2024);
     let range = PartitionKey::Range(12345);
 
@@ -233,5 +317,8 @@ fn test_partition_key_next_by_range() {
 #[test]
 fn test_ingestion_time_uses_day_parsing() {
     let key = PartitionKey::parse("2024-06-15", &PartitionType::IngestionTime).unwrap();
-    assert_eq!(key, PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap()));
+    assert_eq!(
+        key,
+        PartitionKey::Day(NaiveDate::from_ymd_opt(2024, 6, 15).unwrap())
+    );
 }

@@ -1,6 +1,6 @@
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::error::Result;
 
 #[derive(Debug, Clone)]
 pub enum ReplCommand {
@@ -125,7 +125,9 @@ impl ReplCommand {
     pub fn parse_interactive(input: &str) -> Result<Self> {
         let input = input.trim();
         if input.is_empty() {
-            return Err(crate::error::BqDriftError::Repl("Empty command".to_string()));
+            return Err(crate::error::BqDriftError::Repl(
+                "Empty command".to_string(),
+            ));
         }
 
         let parts: Vec<&str> = input.split_whitespace().collect();
@@ -144,9 +146,10 @@ impl ReplCommand {
             "show" => {
                 let query = find_arg(&parts, "--query", "-q")
                     .or_else(|| parts.get(1).map(|s| s.to_string()))
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("show requires --query".to_string()))?;
-                let version = find_arg(&parts, "--version", "-v")
-                    .and_then(|v| v.parse().ok());
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("show requires --query".to_string())
+                    })?;
+                let version = find_arg(&parts, "--version", "-v").and_then(|v| v.parse().ok());
                 Ok(ReplCommand::Show { query, version })
             }
             "run" => {
@@ -155,8 +158,8 @@ impl ReplCommand {
                 let dry_run = has_flag(&parts, "--dry-run");
                 let skip_invariants = has_flag(&parts, "--skip-invariants");
                 let scratch = find_arg(&parts, "--scratch", "-s");
-                let scratch_ttl = find_arg(&parts, "--scratch-ttl", "")
-                    .and_then(|v| v.parse().ok());
+                let scratch_ttl =
+                    find_arg(&parts, "--scratch-ttl", "").and_then(|v| v.parse().ok());
                 Ok(ReplCommand::Run {
                     query,
                     partition,
@@ -169,11 +172,15 @@ impl ReplCommand {
             "backfill" => {
                 let query = find_arg(&parts, "--query", "-q")
                     .or_else(|| parts.get(1).map(|s| s.to_string()))
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires query name".to_string()))?;
-                let from = find_arg(&parts, "--from", "-f")
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires --from".to_string()))?;
-                let to = find_arg(&parts, "--to", "-t")
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires --to".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("backfill requires query name".to_string())
+                    })?;
+                let from = find_arg(&parts, "--from", "-f").ok_or_else(|| {
+                    crate::error::BqDriftError::Repl("backfill requires --from".to_string())
+                })?;
+                let to = find_arg(&parts, "--to", "-t").ok_or_else(|| {
+                    crate::error::BqDriftError::Repl("backfill requires --to".to_string())
+                })?;
                 let dry_run = has_flag(&parts, "--dry-run");
                 let skip_invariants = has_flag(&parts, "--skip-invariants");
                 Ok(ReplCommand::Backfill {
@@ -187,7 +194,9 @@ impl ReplCommand {
             "check" => {
                 let query = find_arg(&parts, "--query", "-q")
                     .or_else(|| parts.get(1).map(|s| s.to_string()))
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("check requires query name".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("check requires query name".to_string())
+                    })?;
                 let partition = find_arg(&parts, "--partition", "-p");
                 let before = has_flag(&parts, "--before");
                 let after = has_flag(&parts, "--after");
@@ -217,8 +226,8 @@ impl ReplCommand {
                 let query = find_arg(&parts, "--query", "-q");
                 let modified_only = has_flag(&parts, "--modified-only");
                 let diff = has_flag(&parts, "--diff");
-                let output = find_arg(&parts, "--output", "-o")
-                    .unwrap_or_else(|| "table".to_string());
+                let output =
+                    find_arg(&parts, "--output", "-o").unwrap_or_else(|| "table".to_string());
                 Ok(ReplCommand::Audit {
                     query,
                     modified_only,
@@ -227,35 +236,53 @@ impl ReplCommand {
                 })
             }
             "init" => {
-                let dataset = find_arg(&parts, "--dataset", "-d")
-                    .unwrap_or_else(|| "bqdrift".to_string());
+                let dataset =
+                    find_arg(&parts, "--dataset", "-d").unwrap_or_else(|| "bqdrift".to_string());
                 Ok(ReplCommand::Init { dataset })
             }
             "scratch" => {
                 let action = parts.get(1).map(|s| s.to_lowercase());
                 match action.as_deref() {
                     Some("list") => {
-                        let project = find_arg(&parts, "--project", "-p")
-                            .ok_or_else(|| crate::error::BqDriftError::Repl("scratch list requires --project".to_string()))?;
+                        let project = find_arg(&parts, "--project", "-p").ok_or_else(|| {
+                            crate::error::BqDriftError::Repl(
+                                "scratch list requires --project".to_string(),
+                            )
+                        })?;
                         Ok(ReplCommand::ScratchList { project })
                     }
                     Some("promote") => {
-                        let query = find_arg(&parts, "--query", "-q")
-                            .ok_or_else(|| crate::error::BqDriftError::Repl("scratch promote requires --query".to_string()))?;
-                        let partition = find_arg(&parts, "--partition", "-p")
-                            .ok_or_else(|| crate::error::BqDriftError::Repl("scratch promote requires --partition".to_string()))?;
+                        let query = find_arg(&parts, "--query", "-q").ok_or_else(|| {
+                            crate::error::BqDriftError::Repl(
+                                "scratch promote requires --query".to_string(),
+                            )
+                        })?;
+                        let partition = find_arg(&parts, "--partition", "-p").ok_or_else(|| {
+                            crate::error::BqDriftError::Repl(
+                                "scratch promote requires --partition".to_string(),
+                            )
+                        })?;
                         let scratch_project = find_arg(&parts, "--scratch-project", "")
-                            .ok_or_else(|| crate::error::BqDriftError::Repl("scratch promote requires --scratch-project".to_string()))?;
+                            .ok_or_else(|| {
+                                crate::error::BqDriftError::Repl(
+                                    "scratch promote requires --scratch-project".to_string(),
+                                )
+                            })?;
                         Ok(ReplCommand::ScratchPromote {
                             query,
                             partition,
                             scratch_project,
                         })
                     }
-                    _ => Err(crate::error::BqDriftError::Repl("scratch requires action: list or promote".to_string())),
+                    _ => Err(crate::error::BqDriftError::Repl(
+                        "scratch requires action: list or promote".to_string(),
+                    )),
                 }
             }
-            _ => Err(crate::error::BqDriftError::Repl(format!("Unknown command: {}", cmd))),
+            _ => Err(crate::error::BqDriftError::Repl(format!(
+                "Unknown command: {}",
+                cmd
+            ))),
         }
     }
 
@@ -278,7 +305,9 @@ impl ReplCommand {
                     .and_then(|p| p.get("query"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("show requires 'query' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("show requires 'query' param".to_string())
+                    })?;
                 let version = params
                     .and_then(|p| p.get("version"))
                     .and_then(|v| v.as_u64())
@@ -324,17 +353,27 @@ impl ReplCommand {
                     .and_then(|p| p.get("query"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires 'query' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "backfill requires 'query' param".to_string(),
+                        )
+                    })?;
                 let from = params
                     .and_then(|p| p.get("from"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires 'from' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "backfill requires 'from' param".to_string(),
+                        )
+                    })?;
                 let to = params
                     .and_then(|p| p.get("to"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("backfill requires 'to' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("backfill requires 'to' param".to_string())
+                    })?;
                 let dry_run = params
                     .and_then(|p| p.get("dry_run"))
                     .and_then(|v| v.as_bool())
@@ -356,7 +395,9 @@ impl ReplCommand {
                     .and_then(|p| p.get("query"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("check requires 'query' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl("check requires 'query' param".to_string())
+                    })?;
                 let partition = params
                     .and_then(|p| p.get("partition"))
                     .and_then(|v| v.as_str())
@@ -444,7 +485,11 @@ impl ReplCommand {
                     .and_then(|p| p.get("project"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("scratch_list requires 'project' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "scratch_list requires 'project' param".to_string(),
+                        )
+                    })?;
                 Ok(ReplCommand::ScratchList { project })
             }
             "scratch_promote" => {
@@ -452,24 +497,39 @@ impl ReplCommand {
                     .and_then(|p| p.get("query"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("scratch_promote requires 'query' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "scratch_promote requires 'query' param".to_string(),
+                        )
+                    })?;
                 let partition = params
                     .and_then(|p| p.get("partition"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("scratch_promote requires 'partition' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "scratch_promote requires 'partition' param".to_string(),
+                        )
+                    })?;
                 let scratch_project = params
                     .and_then(|p| p.get("scratch_project"))
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string())
-                    .ok_or_else(|| crate::error::BqDriftError::Repl("scratch_promote requires 'scratch_project' param".to_string()))?;
+                    .ok_or_else(|| {
+                        crate::error::BqDriftError::Repl(
+                            "scratch_promote requires 'scratch_project' param".to_string(),
+                        )
+                    })?;
                 Ok(ReplCommand::ScratchPromote {
                     query,
                     partition,
                     scratch_project,
                 })
             }
-            _ => Err(crate::error::BqDriftError::Repl(format!("Unknown method: {}", method))),
+            _ => Err(crate::error::BqDriftError::Repl(format!(
+                "Unknown method: {}",
+                method
+            ))),
         }
     }
 }
@@ -517,8 +577,15 @@ mod tests {
 
     #[test]
     fn test_parse_run() {
-        let cmd = ReplCommand::parse_interactive("run --query my_query --partition 2024-01-15").unwrap();
-        if let ReplCommand::Run { query, partition, dry_run, .. } = cmd {
+        let cmd =
+            ReplCommand::parse_interactive("run --query my_query --partition 2024-01-15").unwrap();
+        if let ReplCommand::Run {
+            query,
+            partition,
+            dry_run,
+            ..
+        } = cmd
+        {
             assert_eq!(query, Some("my_query".to_string()));
             assert_eq!(partition, Some("2024-01-15".to_string()));
             assert!(!dry_run);
@@ -552,7 +619,13 @@ mod tests {
             "dry_run": true
         });
         let cmd = ReplCommand::from_json_rpc("run", Some(&params)).unwrap();
-        if let ReplCommand::Run { query, partition, dry_run, .. } = cmd {
+        if let ReplCommand::Run {
+            query,
+            partition,
+            dry_run,
+            ..
+        } = cmd
+        {
             assert_eq!(query, Some("my_query".to_string()));
             assert_eq!(partition, Some("2024-01-15".to_string()));
             assert!(dry_run);

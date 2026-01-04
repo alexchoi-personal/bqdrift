@@ -1,16 +1,13 @@
+use super::dependencies::SqlDependencies;
+use super::parser::{QueryDef, RawQueryDef, ResolvedRevision, VersionDef};
+use super::preprocessor::YamlPreprocessor;
+use super::resolver::VariableResolver;
+use crate::bq_runner::{FileLoader, SqlFile, SqlLoader};
+use crate::error::{BqDriftError, Result};
+use crate::invariant::InvariantsDef;
+use crate::schema::{ClusterConfig, Schema};
 use std::collections::HashMap;
 use std::path::Path;
-use crate::error::{BqDriftError, Result};
-use crate::schema::{ClusterConfig, Schema};
-use crate::invariant::InvariantsDef;
-use super::parser::{
-    QueryDef, VersionDef, ResolvedRevision, RawQueryDef,
-};
-use super::resolver::VariableResolver;
-use super::dependencies::SqlDependencies;
-use super::preprocessor::YamlPreprocessor;
-
-pub use bq_runner::{FileLoader, SqlLoader, SqlFile};
 
 pub struct QueryLoader {
     resolver: VariableResolver,
@@ -36,13 +33,11 @@ impl QueryLoader {
     }
 
     pub fn load_sql_dir(&self, path: impl AsRef<Path>) -> Result<Vec<SqlFile>> {
-        SqlLoader::load_dir(path)
-            .map_err(|e| BqDriftError::DslParse(e.to_string()))
+        SqlLoader::load_dir(path).map_err(|e| BqDriftError::DslParse(e.to_string()))
     }
 
     pub fn load_sql_file(&self, path: impl AsRef<Path>) -> Result<SqlFile> {
-        SqlLoader::load_file(path)
-            .map_err(|e| BqDriftError::DslParse(e.to_string()))
+        SqlLoader::load_file(path).map_err(|e| BqDriftError::DslParse(e.to_string()))
     }
 
     pub fn load_yaml_contents(&self, path: impl AsRef<Path>) -> Result<HashMap<String, String>> {
@@ -61,8 +56,8 @@ impl QueryLoader {
 
     pub fn load_query(&self, yaml_path: impl AsRef<Path>) -> Result<QueryDef> {
         let yaml_path = yaml_path.as_ref();
-        let file = FileLoader::load_file(yaml_path)
-            .map_err(|e| BqDriftError::DslParse(e.to_string()))?;
+        let file =
+            FileLoader::load_file(yaml_path).map_err(|e| BqDriftError::DslParse(e.to_string()))?;
 
         let base_dir = yaml_path.parent().unwrap_or(Path::new("."));
         let processed = self.preprocessor.process(&file.content, base_dir)?;
@@ -81,20 +76,18 @@ impl QueryLoader {
         sorted_versions.sort_by_key(|v| v.version);
 
         for raw_version in sorted_versions {
-            let schema = self.resolver.resolve_schema(
-                &raw_version.schema,
-                &resolved_schemas,
-            )?;
+            let schema = self
+                .resolver
+                .resolve_schema(&raw_version.schema, &resolved_schemas)?;
 
             let sql_content = raw_version.source.clone();
             let dependencies = SqlDependencies::extract(&sql_content).tables;
 
             let revisions = self.resolve_revisions(&raw_version.revisions)?;
 
-            let invariants = self.resolver.resolve_invariants(
-                &raw_version.invariants,
-                &resolved_invariants,
-            )?;
+            let invariants = self
+                .resolver
+                .resolve_invariants(&raw_version.invariants, &resolved_invariants)?;
 
             resolved_schemas.insert(raw_version.version, schema.clone());
             resolved_invariants.insert(raw_version.version, invariants.clone());

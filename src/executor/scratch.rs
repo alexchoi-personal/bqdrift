@@ -1,10 +1,12 @@
-use chrono::{DateTime, Duration, NaiveTime, Utc};
-use crate::error::Result;
-use crate::dsl::QueryDef;
-use crate::schema::PartitionKey;
-use crate::invariant::{InvariantChecker, InvariantReport, CheckStatus, Severity, resolve_invariants_def};
-use crate::dsl::Destination;
 use super::client::BqClient;
+use crate::dsl::Destination;
+use crate::dsl::QueryDef;
+use crate::error::Result;
+use crate::invariant::{
+    resolve_invariants_def, CheckStatus, InvariantChecker, InvariantReport, Severity,
+};
+use crate::schema::PartitionKey;
+use chrono::{DateTime, Duration, NaiveTime, Utc};
 
 const SCRATCH_DATASET: &str = "bqdrift_scratch";
 
@@ -38,14 +40,15 @@ impl ScratchWriter {
     }
 
     pub fn scratch_table_name(query_def: &QueryDef) -> String {
-        format!("{}__{}",
-            query_def.destination.dataset,
-            query_def.destination.table
+        format!(
+            "{}__{}",
+            query_def.destination.dataset, query_def.destination.table
         )
     }
 
     pub fn scratch_table_fqn(&self, query_def: &QueryDef) -> String {
-        format!("{}.{}.{}",
+        format!(
+            "{}.{}.{}",
             self.config.project,
             SCRATCH_DATASET,
             Self::scratch_table_name(query_def)
@@ -57,40 +60,35 @@ impl ScratchWriter {
             return Utc::now() + Duration::hours(hours as i64);
         }
 
-        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).expect("midnight is a valid time");
 
         match partition_key {
             PartitionKey::Hour(dt) => {
-                DateTime::from_naive_utc_and_offset(
-                    *dt + chrono::Duration::hours(1),
-                    Utc
-                )
+                DateTime::from_naive_utc_and_offset(*dt + chrono::Duration::hours(1), Utc)
             }
-            PartitionKey::Day(date) => {
-                DateTime::from_naive_utc_and_offset(
-                    date.and_time(midnight) + chrono::Duration::days(1),
-                    Utc
-                )
-            }
+            PartitionKey::Day(date) => DateTime::from_naive_utc_and_offset(
+                date.and_time(midnight) + chrono::Duration::days(1),
+                Utc,
+            ),
             PartitionKey::Month { year, month } => {
                 let next_month = if *month == 12 { 1 } else { month + 1 };
-                let next_year = if *month == 12 { year + 1 } else { *year };
-                let date = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1).unwrap();
-                DateTime::from_naive_utc_and_offset(
-                    date.and_time(midnight),
-                    Utc
-                )
+                let next_year = if *month == 12 {
+                    year.saturating_add(1)
+                } else {
+                    *year
+                };
+                let date = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
+                    .expect("valid month transition");
+                DateTime::from_naive_utc_and_offset(date.and_time(midnight), Utc)
             }
             PartitionKey::Year(year) => {
-                let date = chrono::NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap();
-                DateTime::from_naive_utc_and_offset(
-                    date.and_time(midnight),
-                    Utc
-                )
+                let next_year = year.checked_add(1).unwrap_or(i32::MAX);
+                let date = chrono::NaiveDate::from_ymd_opt(next_year, 1, 1).unwrap_or_else(|| {
+                    chrono::NaiveDate::from_ymd_opt(i32::MAX, 12, 31).expect("max date is valid")
+                });
+                DateTime::from_naive_utc_and_offset(date.and_time(midnight), Utc)
             }
-            PartitionKey::Range(_) => {
-                Utc::now() + Duration::hours(24)
-            }
+            PartitionKey::Range(_) => Utc::now() + Duration::hours(24),
         }
     }
 
@@ -107,23 +105,30 @@ impl ScratchWriter {
         let partition_date = partition_key.to_naive_date();
         let version = query_def
             .get_version_for_date(partition_date)
-            .ok_or_else(|| crate::error::BqDriftError::Partition(
-                format!("No version found for partition {}", partition_key)
-            ))?;
+            .ok_or_else(|| {
+                crate::error::BqDriftError::Partition(format!(
+                    "No version found for partition {}",
+                    partition_key
+                ))
+            })?;
 
         let scratch_table = Self::scratch_table_name(query_def);
         let expiration = self.calculate_expiration(&partition_key);
 
-        self.client.drop_table(SCRATCH_DATASET, &scratch_table).await?;
+        self.client
+            .drop_table(SCRATCH_DATASET, &scratch_table)
+            .await?;
 
-        self.client.create_table_with_expiration(
-            SCRATCH_DATASET,
-            &scratch_table,
-            &version.schema,
-            &query_def.destination.partition,
-            query_def.cluster.as_ref(),
-            expiration,
-        ).await?;
+        self.client
+            .create_table_with_expiration(
+                SCRATCH_DATASET,
+                &scratch_table,
+                &version.schema,
+                &query_def.destination.partition,
+                query_def.cluster.as_ref(),
+                expiration,
+            )
+            .await?;
 
         let scratch_destination = Destination {
             dataset: SCRATCH_DATASET.to_string(),
@@ -138,34 +143,38 @@ impl ScratchWriter {
             let (before_checks, after_checks) = resolve_invariants_def(&version.invariants);
 
             if !before_checks.is_empty() {
-                let checker = InvariantChecker::new(&self.client, &scratch_destination, partition_date);
+                let checker =
+                    InvariantChecker::new(&self.client, &scratch_destination, partition_date);
                 let results = checker.run_checks(&before_checks).await?;
 
-                let has_error = results.iter().any(|r| {
-                    r.status == CheckStatus::Failed && r.severity == Severity::Error
-                });
+                let has_error = results
+                    .iter()
+                    .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Error);
 
                 invariant_report.before = results;
 
                 if has_error {
                     return Err(crate::error::BqDriftError::InvariantFailed(
-                        "Before invariant check(s) failed with error severity".to_string()
+                        "Before invariant check(s) failed with error severity".to_string(),
                     ));
                 }
             }
 
             let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
-            let full_sql = self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
+            let full_sql =
+                self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
             self.client.execute_query(&full_sql).await?;
 
             if !after_checks.is_empty() {
-                let checker = InvariantChecker::new(&self.client, &scratch_destination, partition_date);
+                let checker =
+                    InvariantChecker::new(&self.client, &scratch_destination, partition_date);
                 let results = checker.run_checks(&after_checks).await?;
                 invariant_report.after = results;
             }
         } else {
             let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
-            let full_sql = self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
+            let full_sql =
+                self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
             self.client.execute_query(&full_sql).await?;
         }
 
@@ -177,7 +186,11 @@ impl ScratchWriter {
             expiration,
             rows_written: None,
             bytes_processed: None,
-            invariant_report: if run_invariants { Some(invariant_report) } else { None },
+            invariant_report: if run_invariants {
+                Some(invariant_report)
+            } else {
+                None
+            },
         })
     }
 
@@ -190,9 +203,7 @@ impl ScratchWriter {
     ) -> String {
         let dest_table = format!(
             "{}.{}.{}",
-            self.config.project,
-            scratch_dest.dataset,
-            scratch_dest.table
+            self.config.project, scratch_dest.dataset, scratch_dest.table
         );
 
         let partition_field = query_def
@@ -202,7 +213,10 @@ impl ScratchWriter {
             .as_deref()
             .unwrap_or("date");
 
-        let parameterized_sql = sql.replace("@partition_date", &format!("'{}'", partition_key.sql_value()));
+        let parameterized_sql = sql.replace(
+            "@partition_date",
+            &format!("'{}'", partition_key.sql_value()),
+        );
 
         let partition_condition = match partition_key {
             PartitionKey::Hour(_) => format!(
@@ -391,11 +405,13 @@ mod tests {
             PartitionKey::Day(date) => {
                 let expected: DateTime<Utc> = DateTime::from_naive_utc_and_offset(
                     date.and_time(midnight) + chrono::Duration::days(1),
-                    Utc
+                    Utc,
                 );
                 let actual: DateTime<Utc> = DateTime::from_naive_utc_and_offset(
-                    NaiveDate::from_ymd_opt(2024, 6, 16).unwrap().and_time(midnight),
-                    Utc
+                    NaiveDate::from_ymd_opt(2024, 6, 16)
+                        .unwrap()
+                        .and_time(midnight),
+                    Utc,
                 );
                 assert_eq!(expected, actual);
             }

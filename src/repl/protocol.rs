@@ -1,6 +1,6 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 pub const PARSE_ERROR: i32 = -32700;
 pub const INVALID_REQUEST: i32 = -32600;
@@ -65,7 +65,12 @@ impl JsonRpcResponse {
         }
     }
 
-    pub fn error_with_data(id: Option<Value>, code: i32, message: impl Into<String>, data: Value) -> Self {
+    pub fn error_with_data(
+        id: Option<Value>,
+        code: i32,
+        message: impl Into<String>,
+        data: Value,
+    ) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             result: None,
@@ -87,7 +92,11 @@ impl JsonRpcResponse {
     }
 
     pub fn method_not_found(id: Option<Value>, method: &str) -> Self {
-        Self::error(id, METHOD_NOT_FOUND, format!("Method not found: {}", method))
+        Self::error(
+            id,
+            METHOD_NOT_FOUND,
+            format!("Method not found: {}", method),
+        )
     }
 
     pub fn invalid_params(id: Option<Value>, message: impl Into<String>) -> Self {
@@ -175,10 +184,8 @@ mod tests {
 
     #[test]
     fn test_error_response() {
-        let response = JsonRpcResponse::method_not_found(
-            Some(Value::Number(1.into())),
-            "unknown_method",
-        );
+        let response =
+            JsonRpcResponse::method_not_found(Some(Value::Number(1.into())), "unknown_method");
 
         let json = serde_json::to_string(&response).unwrap();
         assert!(json.contains("\"error\""));

@@ -1,10 +1,18 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
 use sqlparser::ast::{
-    Expr, Query, Select, SelectItem, SetExpr, Statement, TableFactor, TableWithJoins,
-    FunctionArg, FunctionArgExpr,
+    Expr, FunctionArg, FunctionArgExpr, Query, Select, SelectItem, SetExpr, Statement, TableFactor,
+    TableWithJoins,
 };
 use sqlparser::dialect::BigQueryDialect;
 use sqlparser::parser::Parser;
 use std::collections::HashSet;
+
+static TABLE_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)\b(?:FROM|JOIN|INTO|UPDATE|MERGE\s+INTO)\s+`?([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)`?"
+    ).expect("table pattern regex is valid")
+});
 
 #[derive(Debug, Clone, Default)]
 pub struct SqlDependencies {
@@ -98,7 +106,9 @@ impl SqlDependencies {
             SetExpr::Insert(_) => {}
             SetExpr::Update(_) => {}
             SetExpr::Table(table) => {
-                let name = table.table_name.as_ref()
+                let name = table
+                    .table_name
+                    .as_ref()
                     .map(|n| n.to_string())
                     .unwrap_or_default();
                 if !name.is_empty() && !cte_names.contains(&name) {
@@ -166,7 +176,9 @@ impl SqlDependencies {
             }
             TableFactor::TableFunction { .. } => {}
             TableFactor::UNNEST { .. } => {}
-            TableFactor::NestedJoin { table_with_joins, .. } => {
+            TableFactor::NestedJoin {
+                table_with_joins, ..
+            } => {
                 self.extract_from_table_with_joins(table_with_joins, cte_names);
             }
             TableFactor::Pivot { table, .. } => {
@@ -202,12 +214,20 @@ impl SqlDependencies {
             Expr::UnaryOp { expr, .. } => {
                 self.extract_from_expr(expr, cte_names);
             }
-            Expr::Between { expr, low, high, .. } => {
+            Expr::Between {
+                expr, low, high, ..
+            } => {
                 self.extract_from_expr(expr, cte_names);
                 self.extract_from_expr(low, cte_names);
                 self.extract_from_expr(high, cte_names);
             }
-            Expr::Case { operand, conditions, results, else_result, .. } => {
+            Expr::Case {
+                operand,
+                conditions,
+                results,
+                else_result,
+                ..
+            } => {
                 if let Some(op) = operand {
                     self.extract_from_expr(op, cte_names);
                 }
@@ -238,18 +258,11 @@ impl SqlDependencies {
     }
 
     fn extract_fallback(&mut self, sql: &str) {
-        // Fallback regex-based extraction for simple cases
-        let sql_upper = sql.to_uppercase();
-        let re = regex::Regex::new(
-            r"(?i)\b(?:FROM|JOIN|INTO|UPDATE|MERGE\s+INTO)\s+`?([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)`?",
-        )
-        .unwrap();
-
-        for cap in re.captures_iter(&sql_upper) {
+        for cap in TABLE_PATTERN.captures_iter(sql) {
             if let Some(table) = cap.get(1) {
-                let table_name = table.as_str().to_string();
-                // Skip common keywords that might be captured
-                if !["SELECT", "WHERE", "AND", "OR", "ON", "AS", "SET"].contains(&table_name.as_str())
+                let table_name = table.as_str();
+                if !["SELECT", "WHERE", "AND", "OR", "ON", "AS", "SET"]
+                    .contains(&table_name.to_uppercase().as_str())
                 {
                     self.tables.insert(table_name.to_lowercase());
                 }
@@ -258,7 +271,11 @@ impl SqlDependencies {
     }
 
     pub fn has_dependency(&self, table: &str) -> bool {
-        self.tables.contains(table) || self.tables.iter().any(|t| t.ends_with(&format!(".{}", table)))
+        self.tables.contains(table)
+            || self
+                .tables
+                .iter()
+                .any(|t| t.ends_with(&format!(".{}", table)))
     }
 }
 
@@ -360,7 +377,10 @@ mod tests {
         let sql = "SELECT * FROM `project.dataset.table`";
         let deps = SqlDependencies::extract(sql);
         // BigQuery dialect parses backtick-quoted identifiers
-        assert!(deps.tables.iter().any(|t| t.contains("project") && t.contains("dataset") && t.contains("table")));
+        assert!(deps
+            .tables
+            .iter()
+            .any(|t| t.contains("project") && t.contains("dataset") && t.contains("table")));
     }
 
     #[test]

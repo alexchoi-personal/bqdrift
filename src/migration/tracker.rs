@@ -1,8 +1,12 @@
-use chrono::{DateTime, NaiveDate, Utc};
 use crate::error::Result;
 use crate::executor::BqClient;
+use chrono::{DateTime, NaiveDate, Utc};
 
 const TRACKING_TABLE: &str = "_bqdrift_query_runs";
+
+fn escape_sql_string(s: &str) -> String {
+    s.replace('\'', "''")
+}
 
 #[derive(Debug, Clone)]
 pub struct QueryRun {
@@ -78,14 +82,26 @@ impl MigrationTracker {
             )
             "#,
             table_name = table_name,
-            query_name = run.query_name,
+            query_name = escape_sql_string(&run.query_name),
             version = run.query_version,
-            revision = run.sql_revision.map(|r| r.to_string()).unwrap_or("NULL".to_string()),
+            revision = run
+                .sql_revision
+                .map(|r| r.to_string())
+                .unwrap_or("NULL".to_string()),
             partition_date = run.partition_date,
             executed_at = run.executed_at.format("%Y-%m-%d %H:%M:%S UTC"),
-            rows = run.rows_written.map(|r| r.to_string()).unwrap_or("NULL".to_string()),
-            bytes = run.bytes_processed.map(|b| b.to_string()).unwrap_or("NULL".to_string()),
-            time_ms = run.execution_time_ms.map(|t| t.to_string()).unwrap_or("NULL".to_string()),
+            rows = run
+                .rows_written
+                .map(|r| r.to_string())
+                .unwrap_or("NULL".to_string()),
+            bytes = run
+                .bytes_processed
+                .map(|b| b.to_string())
+                .unwrap_or("NULL".to_string()),
+            time_ms = run
+                .execution_time_ms
+                .map(|t| t.to_string())
+                .unwrap_or("NULL".to_string()),
             status = status_str,
         );
 
@@ -111,12 +127,10 @@ impl MigrationTracker {
             LIMIT 1
             "#,
             table_name = table_name,
-            query_name = query_name,
+            query_name = escape_sql_string(query_name),
             partition_date = partition_date,
         );
 
-        // Note: In a real implementation, we'd parse the query results
-        // For now, this is a placeholder that executes the query
         self.client.execute_query(&sql).await?;
         Ok(None)
     }
@@ -140,7 +154,7 @@ impl MigrationTracker {
             ORDER BY partition_date, executed_at DESC
             "#,
             table_name = table_name,
-            query_name = query_name,
+            query_name = escape_sql_string(query_name),
             from = from,
             to = to,
         );

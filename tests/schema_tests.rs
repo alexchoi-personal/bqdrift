@@ -1,4 +1,6 @@
-use bqdrift::schema::{BqType, Field, FieldMode, Schema, PartitionConfig, PartitionType, ClusterConfig};
+use bqdrift::schema::{
+    BqType, ClusterConfig, Field, FieldMode, PartitionConfig, PartitionType, Schema,
+};
 
 #[test]
 fn test_field_creation() {
@@ -24,8 +26,7 @@ fn test_field_repeated() {
 
 #[test]
 fn test_field_with_description() {
-    let field = Field::new("count", BqType::Int64)
-        .with_description("Total event count");
+    let field = Field::new("count", BqType::Int64).with_description("Total event count");
     assert_eq!(field.description, Some("Total event count".to_string()));
 }
 
@@ -73,8 +74,7 @@ fn test_schema_get_field() {
 
 #[test]
 fn test_schema_has_field() {
-    let schema = Schema::new()
-        .add_field(Field::new("date", BqType::Date));
+    let schema = Schema::new().add_field(Field::new("date", BqType::Date));
 
     assert!(schema.has_field("date"));
     assert!(!schema.has_field("nonexistent"));
@@ -124,10 +124,7 @@ fn test_partition_config_ingestion_time() {
 
 #[test]
 fn test_cluster_config_valid() {
-    let config = ClusterConfig::new(vec![
-        "region".to_string(),
-        "country".to_string(),
-    ]);
+    let config = ClusterConfig::new(vec!["region".to_string(), "country".to_string()]);
     assert!(config.is_ok());
     assert_eq!(config.unwrap().len(), 2);
 }

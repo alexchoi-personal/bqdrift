@@ -1,8 +1,8 @@
+use crate::error::{BqDriftError, Result};
+use regex::Regex;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::Regex;
-use crate::error::{BqDriftError, Result};
 
 pub struct YamlPreprocessor {
     file_pattern: Regex,
@@ -11,50 +11,62 @@ pub struct YamlPreprocessor {
 impl YamlPreprocessor {
     pub fn new() -> Self {
         Self {
-            file_pattern: Regex::new(r#"\$\{\{\s*file:\s*([^\s}]+)\s*\}\}"#).unwrap(),
+            file_pattern: Regex::new(r#"\$\{\{\s*file:\s*([^\s}]+)\s*\}\}"#)
+                .expect("file pattern regex is valid"),
         }
     }
 
     pub fn process(&self, content: &str, base_dir: &Path) -> Result<String> {
         let mut visited = HashSet::new();
-        self.process_recursive(content, base_dir, &mut visited)
+        let canonical_base = base_dir.canonicalize().map_err(|_| {
+            BqDriftError::FileInclude(format!("Base directory not found: {}", base_dir.display()))
+        })?;
+        self.process_recursive(content, base_dir, &canonical_base, &mut visited)
     }
 
     fn process_recursive(
         &self,
         content: &str,
         base_dir: &Path,
+        root_base: &Path,
         visited: &mut HashSet<PathBuf>,
     ) -> Result<String> {
         let mut result = String::new();
         let mut last_end = 0;
 
         for caps in self.file_pattern.captures_iter(content) {
-            let full_match = caps.get(0).unwrap();
-            let file_path = caps.get(1).unwrap().as_str();
+            let full_match = caps.get(0).expect("regex match has group 0");
+            let file_path = caps.get(1).expect("regex match has group 1").as_str();
 
             result.push_str(&content[last_end..full_match.start()]);
 
             let resolved_path = base_dir.join(file_path);
-            let canonical = resolved_path.canonicalize()
-                .map_err(|_| BqDriftError::FileInclude(
-                    format!("File not found: {}", resolved_path.display())
-                ))?;
+            let canonical = resolved_path.canonicalize().map_err(|_| {
+                BqDriftError::FileInclude(format!("File not found: {}", resolved_path.display()))
+            })?;
+
+            if !canonical.starts_with(root_base) {
+                return Err(BqDriftError::FileInclude(format!(
+                    "Path traversal not allowed: {}",
+                    file_path
+                )));
+            }
 
             if visited.contains(&canonical) {
-                return Err(BqDriftError::FileInclude(
-                    format!("Circular include detected: {}", canonical.display())
-                ));
+                return Err(BqDriftError::FileInclude(format!(
+                    "Circular include detected: {}",
+                    canonical.display()
+                )));
             }
             visited.insert(canonical.clone());
 
-            let included_content = fs::read_to_string(&canonical)
-                .map_err(|_| BqDriftError::FileInclude(
-                    format!("Failed to read: {}", canonical.display())
-                ))?;
+            let included_content = fs::read_to_string(&canonical).map_err(|_| {
+                BqDriftError::FileInclude(format!("Failed to read: {}", canonical.display()))
+            })?;
 
             let included_base = canonical.parent().unwrap_or(base_dir);
-            let processed = self.process_recursive(&included_content, included_base, visited)?;
+            let processed =
+                self.process_recursive(&included_content, included_base, root_base, visited)?;
 
             let indent = self.detect_indent(content, full_match.start());
             let indented = self.apply_indent(&processed, &indent, full_match.start(), content);
@@ -73,7 +85,10 @@ impl YamlPreprocessor {
         let before = &content[..match_start];
         if let Some(line_start) = before.rfind('\n') {
             let line_prefix = &before[line_start + 1..];
-            let indent: String = line_prefix.chars().take_while(|c| c.is_whitespace()).collect();
+            let indent: String = line_prefix
+                .chars()
+                .take_while(|c| c.is_whitespace())
+                .collect();
             indent
         } else {
             let indent: String = before.chars().take_while(|c| c.is_whitespace()).collect();
@@ -81,7 +96,13 @@ impl YamlPreprocessor {
         }
     }
 
-    fn apply_indent(&self, content: &str, indent: &str, match_start: usize, original: &str) -> String {
+    fn apply_indent(
+        &self,
+        content: &str,
+        indent: &str,
+        match_start: usize,
+        original: &str,
+    ) -> String {
         let trimmed = content.trim();
 
         if !trimmed.contains('\n') {
@@ -134,7 +155,12 @@ impl YamlPreprocessor {
     pub fn extract_file_refs(&self, content: &str) -> Vec<String> {
         self.file_pattern
             .captures_iter(content)
-            .map(|caps| caps.get(1).unwrap().as_str().to_string())
+            .map(|caps| {
+                caps.get(1)
+                    .expect("regex match has group 1")
+                    .as_str()
+                    .to_string()
+            })
             .collect()
     }
 }
@@ -159,7 +185,11 @@ mod tests {
     fn test_simple_file_include() {
         let dir = setup_test_dir();
         let schema_path = dir.path().join("schema.yaml");
-        fs::write(&schema_path, "- name: id\n  type: INT64\n- name: name\n  type: STRING").unwrap();
+        fs::write(
+            &schema_path,
+            "- name: id\n  type: INT64\n- name: name\n  type: STRING",
+        )
+        .unwrap();
 
         let preprocessor = YamlPreprocessor::new();
         let input = "schema: ${{ file: schema.yaml }}";
@@ -257,12 +287,39 @@ source: ${{ file: query.sql }}
     fn test_preserves_indentation_in_list() {
         let dir = setup_test_dir();
         let schema_path = dir.path().join("schema.yaml");
-        fs::write(&schema_path, "- name: a\n  type: INT64\n- name: b\n  type: STRING").unwrap();
+        fs::write(
+            &schema_path,
+            "- name: a\n  type: INT64\n- name: b\n  type: STRING",
+        )
+        .unwrap();
 
         let preprocessor = YamlPreprocessor::new();
         let input = "versions:\n  - version: 1\n    schema: ${{ file: schema.yaml }}";
         let result = preprocessor.process(input, dir.path()).unwrap();
 
         assert!(result.contains("versions:"));
+    }
+
+    #[test]
+    fn test_path_traversal_blocked() {
+        let dir = setup_test_dir();
+        let outside_dir = tempfile::tempdir().unwrap();
+        let outside_file = outside_dir.path().join("secret.txt");
+        std::fs::write(&outside_file, "secret content").unwrap();
+
+        let relative_path =
+            pathdiff::diff_paths(&outside_file, dir.path()).unwrap_or_else(|| outside_file.clone());
+
+        let preprocessor = YamlPreprocessor::new();
+        let input = format!("schema: ${{{{ file: {} }}}}", relative_path.display());
+        let result = preprocessor.process(&input, dir.path());
+
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("traversal"),
+            "Expected 'traversal' in error: {}",
+            err_msg
+        );
     }
 }

@@ -1,17 +1,23 @@
-use clap::{Parser, Subcommand, ValueEnum};
 use chrono::{Datelike, NaiveDate, Timelike};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::process::ExitCode;
-use tracing::{info, error, warn};
+use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
-use bqdrift::{QueryLoader, QueryValidator, Runner, CheckStatus, Severity, InvariantChecker, resolve_invariants_def};
-use bqdrift::{DriftDetector, DriftState, decode_sql, format_sql_diff, has_changes, ImmutabilityChecker, ImmutabilityViolation, SourceAuditor, SourceStatus, AuditTableRow};
-use tabled::{Table, settings::Style};
+use bqdrift::error::{BigQueryError, BqDriftError};
 use bqdrift::executor::BqClient;
-use bqdrift::error::{BqDriftError, BigQueryError};
 use bqdrift::executor::PartitionWriteStats;
 use bqdrift::schema::{PartitionKey, PartitionType};
+use bqdrift::{
+    decode_sql, format_sql_diff, has_changes, AuditTableRow, DriftDetector, DriftState,
+    ImmutabilityChecker, ImmutabilityViolation, SourceAuditor, SourceStatus,
+};
+use bqdrift::{
+    resolve_invariants_def, CheckStatus, InvariantChecker, QueryLoader, QueryValidator, Runner,
+    Severity,
+};
+use tabled::{settings::Style, Table};
 
 #[derive(Parser)]
 #[command(name = "bqdrift")]
@@ -283,9 +289,11 @@ fn print_bq_error(err: &BigQueryError) {
     eprintln!();
 }
 
-fn parse_partition_key(s: &str, partition_type: &PartitionType) -> Result<PartitionKey, Box<dyn std::error::Error>> {
-    PartitionKey::parse(s, partition_type)
-        .map_err(|e| e.into())
+fn parse_partition_key(
+    s: &str,
+    partition_type: &PartitionType,
+) -> Result<PartitionKey, Box<dyn std::error::Error>> {
+    PartitionKey::parse(s, partition_type).map_err(|e| e.into())
 }
 
 fn default_partition_key(partition_type: &PartitionType) -> PartitionKey {
@@ -296,7 +304,10 @@ fn default_partition_key(partition_type: &PartitionType) -> PartitionKey {
             PartitionKey::Hour(now.date().and_hms_opt(now.time().hour(), 0, 0).unwrap())
         }
         PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
-        PartitionType::Month => PartitionKey::Month { year: today.year(), month: today.month() },
+        PartitionType::Month => PartitionKey::Month {
+            year: today.year(),
+            month: today.month(),
+        },
         PartitionType::Year => PartitionKey::Year(today.year()),
         PartitionType::Range => PartitionKey::Range(0),
     }
@@ -307,7 +318,9 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         return run_repl(cli).await;
     }
 
-    let command = cli.command.ok_or("No command specified. Use --help for usage or --repl for interactive mode.")?;
+    let command = cli
+        .command
+        .ok_or("No command specified. Use --help for usage or --repl for interactive mode.")?;
 
     let loader = QueryLoader::new();
 
@@ -320,19 +333,73 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             cmd_list(&loader, &cli.queries, detailed)?;
         }
 
-        Commands::Run { query, partition, dry_run, skip_invariants, scratch, scratch_ttl } => {
-            let project = cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
-            cmd_run(&loader, &cli.queries, &project, query, partition, dry_run, skip_invariants, scratch, scratch_ttl).await?;
+        Commands::Run {
+            query,
+            partition,
+            dry_run,
+            skip_invariants,
+            scratch,
+            scratch_ttl,
+        } => {
+            let project = cli
+                .project
+                .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
+            cmd_run(
+                &loader,
+                &cli.queries,
+                &project,
+                query,
+                partition,
+                dry_run,
+                skip_invariants,
+                scratch,
+                scratch_ttl,
+            )
+            .await?;
         }
 
-        Commands::Backfill { query, from, to, dry_run, skip_invariants } => {
-            let project = cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
-            cmd_backfill(&loader, &cli.queries, &project, &query, from, to, dry_run, skip_invariants).await?;
+        Commands::Backfill {
+            query,
+            from,
+            to,
+            dry_run,
+            skip_invariants,
+        } => {
+            let project = cli
+                .project
+                .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
+            cmd_backfill(
+                &loader,
+                &cli.queries,
+                &project,
+                &query,
+                from,
+                to,
+                dry_run,
+                skip_invariants,
+            )
+            .await?;
         }
 
-        Commands::Check { query, partition, before, after } => {
-            let project = cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
-            cmd_check(&loader, &cli.queries, &project, &query, partition, before, after).await?;
+        Commands::Check {
+            query,
+            partition,
+            before,
+            after,
+        } => {
+            let project = cli
+                .project
+                .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
+            cmd_check(
+                &loader,
+                &cli.queries,
+                &project,
+                &query,
+                partition,
+                before,
+                after,
+            )
+            .await?;
         }
 
         Commands::Show { query, version } => {
@@ -340,40 +407,81 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Init { dataset } => {
-            let project = cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
+            let project = cli
+                .project
+                .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
             cmd_init(&project, &dataset).await?;
         }
 
-        Commands::Sync { from, to, dry_run, skip_invariants: _, tracking_dataset, allow_source_mutation } => {
+        Commands::Sync {
+            from,
+            to,
+            dry_run,
+            skip_invariants: _,
+            tracking_dataset,
+            allow_source_mutation,
+        } => {
             let project = if dry_run {
                 cli.project.unwrap_or_default()
             } else {
-                cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?
+                cli.project
+                    .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?
             };
-            cmd_sync(&loader, &cli.queries, &project, from, to, dry_run, &tracking_dataset, allow_source_mutation).await?;
+            cmd_sync(
+                &loader,
+                &cli.queries,
+                &project,
+                from,
+                to,
+                dry_run,
+                &tracking_dataset,
+                allow_source_mutation,
+            )
+            .await?;
         }
 
-        Commands::Audit { query, modified_only, diff, output, tracking_dataset: _ } => {
+        Commands::Audit {
+            query,
+            modified_only,
+            diff,
+            output,
+            tracking_dataset: _,
+        } => {
             cmd_audit(&loader, &cli.queries, query, modified_only, diff, output)?;
         }
 
-        Commands::Scratch { action } => {
-            match action {
-                ScratchAction::List { project } => {
-                    cmd_scratch_list(&project).await?;
-                }
-                ScratchAction::Promote { query, partition, scratch_project } => {
-                    let project = cli.project.ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
-                    cmd_scratch_promote(&loader, &cli.queries, &project, &scratch_project, &query, &partition).await?;
-                }
+        Commands::Scratch { action } => match action {
+            ScratchAction::List { project } => {
+                cmd_scratch_list(&project).await?;
             }
-        }
+            ScratchAction::Promote {
+                query,
+                partition,
+                scratch_project,
+            } => {
+                let project = cli
+                    .project
+                    .ok_or("Project ID required (--project or GCP_PROJECT_ID)")?;
+                cmd_scratch_promote(
+                    &loader,
+                    &cli.queries,
+                    &project,
+                    &scratch_project,
+                    &query,
+                    &partition,
+                )
+                .await?;
+            }
+        },
     }
 
     Ok(())
 }
 
-fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_validate(
+    loader: &QueryLoader,
+    queries_path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     info!("Validating queries in {}", queries_path.display());
 
     let queries = loader.load_dir(queries_path)?;
@@ -386,7 +494,11 @@ fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<
         let result = QueryValidator::validate(&query);
 
         let status = if result.is_valid() {
-            if result.has_warnings() { "⚠" } else { "✓" }
+            if result.has_warnings() {
+                "⚠"
+            } else {
+                "✓"
+            }
         } else {
             "✗"
         };
@@ -399,7 +511,10 @@ fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<
             let revisions = version.revisions.len();
 
             if revisions > 0 {
-                println!("  v{}: {} fields, {} SQL revisions", version.version, schema_fields, revisions);
+                println!(
+                    "  v{}: {} fields, {} SQL revisions",
+                    version.version, schema_fields, revisions
+                );
             } else {
                 println!("  v{}: {} fields", version.version, schema_fields);
             }
@@ -412,7 +527,10 @@ fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<
 
         // Show warnings
         for warn in &result.warnings {
-            println!("    {} [{}] {}", "\x1b[33m⚠\x1b[0m", warn.code, warn.message);
+            println!(
+                "    {} [{}] {}",
+                "\x1b[33m⚠\x1b[0m", warn.code, warn.message
+            );
         }
 
         total_errors += result.errors.len();
@@ -426,12 +544,20 @@ fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<
     println!();
 
     if total_errors > 0 {
-        println!("✗ Validation failed: {} errors, {} warnings in {} queries",
-            total_errors, total_warnings, queries.len());
+        println!(
+            "✗ Validation failed: {} errors, {} warnings in {} queries",
+            total_errors,
+            total_warnings,
+            queries.len()
+        );
         println!("  Failed: {}", failed_queries.join(", "));
         return Err("Validation failed".into());
     } else if total_warnings > 0 {
-        println!("⚠ {} queries validated with {} warnings", queries.len(), total_warnings);
+        println!(
+            "⚠ {} queries validated with {} warnings",
+            queries.len(),
+            total_warnings
+        );
     } else {
         println!("✓ {} queries validated successfully", queries.len());
     }
@@ -439,7 +565,11 @@ fn cmd_validate(loader: &QueryLoader, queries_path: &PathBuf) -> Result<(), Box<
     Ok(())
 }
 
-fn cmd_list(loader: &QueryLoader, queries_path: &PathBuf, detailed: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn cmd_list(
+    loader: &QueryLoader,
+    queries_path: &PathBuf,
+    detailed: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let queries = loader.load_dir(queries_path)?;
 
     if queries.is_empty() {
@@ -450,7 +580,10 @@ fn cmd_list(loader: &QueryLoader, queries_path: &PathBuf, detailed: bool) -> Res
     for query in &queries {
         if detailed {
             println!("{}", query.name);
-            println!("  destination: {}.{}", query.destination.dataset, query.destination.table);
+            println!(
+                "  destination: {}.{}",
+                query.destination.dataset, query.destination.table
+            );
 
             if let Some(desc) = &query.description {
                 println!("  description: {}", desc);
@@ -463,7 +596,10 @@ fn cmd_list(loader: &QueryLoader, queries_path: &PathBuf, detailed: bool) -> Res
             println!("  versions: {}", query.versions.len());
 
             if let Some(latest) = query.latest_version() {
-                println!("  latest: v{} (effective {})", latest.version, latest.effective_from);
+                println!(
+                    "  latest: v{} (effective {})",
+                    latest.version, latest.effective_from
+                );
             }
 
             if let Some(cluster) = &query.cluster {
@@ -473,11 +609,9 @@ fn cmd_list(loader: &QueryLoader, queries_path: &PathBuf, detailed: bool) -> Res
             println!();
         } else {
             let latest = query.latest_version().map(|v| v.version).unwrap_or(0);
-            println!("{:<30} v{:<3} {}.{}",
-                query.name,
-                latest,
-                query.destination.dataset,
-                query.destination.table
+            println!(
+                "{:<30} v{:<3} {}.{}",
+                query.name, latest, query.destination.dataset, query.destination.table
             );
         }
     }
@@ -522,14 +656,20 @@ async fn cmd_run(
 
             info!("Dry run for partition: {}", partition_key);
             println!("Query: {}", query.name);
-            println!("Destination: {}.{}", query.destination.dataset, query.destination.table);
+            println!(
+                "Destination: {}.{}",
+                query.destination.dataset, query.destination.table
+            );
             println!("Partition type: {:?}", partition_type);
 
             let date_for_version = partition_key.to_naive_date();
             if let Some(version) = query.get_version_for_date(date_for_version) {
                 println!("Version: {}", version.version);
                 println!("Source: {}", version.source);
-                println!("\n--- SQL ---\n{}\n-----------\n", version.get_sql_for_date(date_for_version));
+                println!(
+                    "\n--- SQL ---\n{}\n-----------\n",
+                    version.get_sql_for_date(date_for_version)
+                );
 
                 if !skip_invariants {
                     let before_count = version.invariants.before.len();
@@ -553,7 +693,8 @@ async fn cmd_run(
     if let Some(scratch_project) = scratch {
         let query_name = query_name.ok_or("Query name required for scratch mode (--query)")?;
 
-        let query = queries.iter()
+        let query = queries
+            .iter()
             .find(|q| q.name == query_name)
             .ok_or_else(|| format!("Query '{}' not found", query_name))?;
 
@@ -575,14 +716,25 @@ async fn cmd_run(
         let scratch_writer = ScratchWriter::new(scratch_client, config);
         scratch_writer.ensure_dataset().await?;
 
-        info!("Writing to scratch table: {}", scratch_writer.scratch_table_fqn(query));
+        info!(
+            "Writing to scratch table: {}",
+            scratch_writer.scratch_table_fqn(query)
+        );
 
-        let stats = scratch_writer.write_partition(query, partition_key, !skip_invariants).await?;
+        let stats = scratch_writer
+            .write_partition(query, partition_key, !skip_invariants)
+            .await?;
 
-        println!("\n✓ {} v{} completed (scratch)", stats.query_name, stats.version);
+        println!(
+            "\n✓ {} v{} completed (scratch)",
+            stats.query_name, stats.version
+        );
         println!("  Destination: {}", stats.scratch_table);
         println!("  Partition: {}", stats.partition_key);
-        println!("  Expires: {}", stats.expiration.format("%Y-%m-%dT%H:%M:%SZ"));
+        println!(
+            "  Expires: {}",
+            stats.expiration.format("%Y-%m-%dT%H:%M:%SZ")
+        );
 
         if !skip_invariants {
             if let Some(report) = &stats.invariant_report {
@@ -591,14 +743,18 @@ async fn cmd_run(
         }
 
         println!("\nTo promote to production (copy scratch data):");
-        println!("  bqdrift scratch promote --query {} --partition {} --scratch-project {}", stats.query_name, stats.partition_key, scratch_project);
+        println!(
+            "  bqdrift scratch promote --query {} --partition {} --scratch-project {}",
+            stats.query_name, stats.partition_key, scratch_project
+        );
 
         return Ok(());
     }
 
     match query_name {
         Some(name) => {
-            let query = queries.iter()
+            let query = queries
+                .iter()
                 .find(|q| q.name == name)
                 .ok_or_else(|| format!("Query '{}' not found", name))?;
             let partition_type = &query.destination.partition.partition_type;
@@ -631,10 +787,17 @@ async fn cmd_run(
             }
 
             for failure in &report.failures {
-                eprintln!("\x1b[31m✗\x1b[0m {} ({}): {}", failure.query_name, failure.partition_key, failure.error);
+                eprintln!(
+                    "\x1b[31m✗\x1b[0m {} ({}): {}",
+                    failure.query_name, failure.partition_key, failure.error
+                );
             }
 
-            println!("\n{} succeeded, {} failed", report.stats.len(), report.failures.len());
+            println!(
+                "\n{} succeeded, {} failed",
+                report.stats.len(),
+                report.failures.len()
+            );
         }
     }
 
@@ -665,7 +828,13 @@ fn print_scratch_invariants(report: &bqdrift::invariant::InvariantReport) {
         for result in report.before.iter().chain(report.after.iter()) {
             let icon = match result.status {
                 CheckStatus::Passed => "✓",
-                CheckStatus::Failed => if result.severity == Severity::Warning { "⚠" } else { "✗" },
+                CheckStatus::Failed => {
+                    if result.severity == Severity::Warning {
+                        "⚠"
+                    } else {
+                        "✗"
+                    }
+                }
                 _ => "?",
             };
             println!("    {} {}: {}", icon, result.name, result.message);
@@ -674,7 +843,10 @@ fn print_scratch_invariants(report: &bqdrift::invariant::InvariantReport) {
 }
 
 fn print_stats(stats: &PartitionWriteStats, skip_invariants: bool) {
-    println!("✓ {} v{} completed for {}", stats.query_name, stats.version, stats.partition_key);
+    println!(
+        "✓ {} v{} completed for {}",
+        stats.query_name, stats.version, stats.partition_key
+    );
 
     if !skip_invariants {
         if let Some(report) = &stats.invariant_report {
@@ -708,10 +880,22 @@ fn print_stats(stats: &PartitionWriteStats, skip_invariants: bool) {
 
                 for result in report.before.iter().chain(report.after.iter()) {
                     if result.status == CheckStatus::Failed {
-                        let color = if result.severity == Severity::Warning { "33" } else { "31" };
-                        println!("    \x1b[{}m{}\x1b[0m {}: {}", color,
-                            if result.severity == Severity::Warning { "⚠" } else { "✗" },
-                            result.name, result.message);
+                        let color = if result.severity == Severity::Warning {
+                            "33"
+                        } else {
+                            "31"
+                        };
+                        println!(
+                            "    \x1b[{}m{}\x1b[0m {}: {}",
+                            color,
+                            if result.severity == Severity::Warning {
+                                "⚠"
+                            } else {
+                                "✗"
+                            },
+                            result.name,
+                            result.message
+                        );
                     }
                 }
             }
@@ -731,7 +915,8 @@ async fn cmd_backfill(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let queries = loader.load_dir(queries_path)?;
 
-    let query = queries.iter()
+    let query = queries
+        .iter()
         .find(|q| q.name == query_name)
         .ok_or_else(|| format!("Query '{}' not found", query_name))?;
 
@@ -739,7 +924,10 @@ async fn cmd_backfill(
     let from_key = parse_partition_key(&from, partition_type)?;
     let to_key = parse_partition_key(&to, partition_type)?;
 
-    info!("Backfilling '{}' from {} to {}", query_name, from_key, to_key);
+    info!(
+        "Backfilling '{}' from {} to {}",
+        query_name, from_key, to_key
+    );
 
     if dry_run {
         let mut current = from_key.clone();
@@ -762,17 +950,26 @@ async fn cmd_backfill(
     let client = BqClient::new(project).await?;
     let runner = Runner::new(client, queries);
 
-    let report = runner.backfill_partitions(query_name, from_key, to_key, None).await?;
+    let report = runner
+        .backfill_partitions(query_name, from_key, to_key, None)
+        .await?;
 
     for stats in &report.stats {
         print_stats(stats, skip_invariants);
     }
 
     for failure in &report.failures {
-        eprintln!("\x1b[31m✗\x1b[0m {}: {}", failure.partition_key, failure.error);
+        eprintln!(
+            "\x1b[31m✗\x1b[0m {}: {}",
+            failure.partition_key, failure.error
+        );
     }
 
-    println!("\n{} succeeded, {} failed", report.stats.len(), report.failures.len());
+    println!(
+        "\n{} succeeded, {} failed",
+        report.stats.len(),
+        report.failures.len()
+    );
 
     Ok(())
 }
@@ -788,7 +985,8 @@ async fn cmd_check(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let queries = loader.load_dir(queries_path)?;
 
-    let query = queries.iter()
+    let query = queries
+        .iter()
         .find(|q| q.name == query_name)
         .ok_or_else(|| format!("Query '{}' not found", query_name))?;
 
@@ -799,7 +997,8 @@ async fn cmd_check(
     };
     let date_for_version = partition_key.to_naive_date();
 
-    let version = query.get_version_for_date(date_for_version)
+    let version = query
+        .get_version_for_date(date_for_version)
         .ok_or_else(|| format!("No version found for date {}", date_for_version))?;
 
     let (before_checks, after_checks) = resolve_invariants_def(&version.invariants);
@@ -813,7 +1012,10 @@ async fn cmd_check(
     let mut total_failed = 0;
     let mut has_errors = false;
 
-    println!("Running invariant checks for '{}' v{} on {}", query.name, version.version, partition_key);
+    println!(
+        "Running invariant checks for '{}' v{} on {}",
+        query.name, version.version, partition_key
+    );
     println!();
 
     if (run_all || run_before) && !before_checks.is_empty() {
@@ -896,12 +1098,16 @@ fn cmd_show(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let queries = loader.load_dir(queries_path)?;
 
-    let query = queries.iter()
+    let query = queries
+        .iter()
         .find(|q| q.name == query_name)
         .ok_or_else(|| format!("Query '{}' not found", query_name))?;
 
     println!("Name: {}", query.name);
-    println!("Destination: {}.{}", query.destination.dataset, query.destination.table);
+    println!(
+        "Destination: {}.{}",
+        query.destination.dataset, query.destination.table
+    );
 
     if let Some(desc) = &query.description {
         println!("Description: {}", desc);
@@ -916,7 +1122,15 @@ fn cmd_show(
     }
 
     println!("\nPartition:");
-    println!("  field: {}", query.destination.partition.field.as_deref().unwrap_or("_PARTITIONTIME"));
+    println!(
+        "  field: {}",
+        query
+            .destination
+            .partition
+            .field
+            .as_deref()
+            .unwrap_or("_PARTITIONTIME")
+    );
     println!("  type: {:?}", query.destination.partition.partition_type);
 
     if let Some(cluster) = &query.cluster {
@@ -940,7 +1154,10 @@ fn cmd_show(
         if !version.revisions.is_empty() {
             println!("  revisions:");
             for rev in &version.revisions {
-                print!("    r{}: {} ({})", rev.revision, rev.source, rev.effective_from);
+                print!(
+                    "    r{}: {} ({})",
+                    rev.revision, rev.source, rev.effective_from
+                );
                 if let Some(reason) = &rev.reason {
                     print!(" - {}", reason);
                 }
@@ -1022,7 +1239,9 @@ async fn cmd_sync(
 
         if !immutability_report.is_clean() {
             print_immutability_violations(&immutability_report.violations);
-            return Err("Source immutability violated. Use --allow-source-mutation to override.".into());
+            return Err(
+                "Source immutability violated. Use --allow-source-mutation to override.".into(),
+            );
         }
     }
 
@@ -1058,7 +1277,8 @@ async fn cmd_sync(
 
         let by_query = report.by_query();
         for (query_name, partitions) in by_query {
-            let drifted_partitions: Vec<_> = partitions.iter()
+            let drifted_partitions: Vec<_> = partitions
+                .iter()
                 .filter(|p| p.state.needs_rerun())
                 .collect();
 
@@ -1079,10 +1299,15 @@ async fn cmd_sync(
                     DriftState::Current => "current",
                 };
 
-                println!("  {} [{}] v{}", partition.partition_key, state_str, partition.current_version);
+                println!(
+                    "  {} [{}] v{}",
+                    partition.partition_key, state_str, partition.current_version
+                );
 
                 if partition.state == DriftState::SqlChanged {
-                    if let (Some(executed_b64), Some(current_sql)) = (&partition.executed_sql_b64, &partition.current_sql) {
+                    if let (Some(executed_b64), Some(current_sql)) =
+                        (&partition.executed_sql_b64, &partition.current_sql)
+                    {
                         if let Some(executed_sql) = decode_sql(executed_b64) {
                             if has_changes(&executed_sql, current_sql) {
                                 println!();
@@ -1096,7 +1321,10 @@ async fn cmd_sync(
             println!();
         }
 
-        println!("Run without --dry-run to execute {} drifted partitions", drifted.len());
+        println!(
+            "Run without --dry-run to execute {} drifted partitions",
+            drifted.len()
+        );
     } else {
         println!("\nSync execution not yet implemented. Use --dry-run to preview changes.");
     }
@@ -1115,7 +1343,10 @@ fn print_immutability_violations(violations: &[ImmutabilityViolation]) {
             eprintln!("\x1b[1mRevision:\x1b[0m {}", rev);
         }
         eprintln!("\x1b[1mSource:\x1b[0m {}", violation.source);
-        eprintln!("\x1b[1mAffected partitions:\x1b[0m {} partitions", violation.affected_partitions.len());
+        eprintln!(
+            "\x1b[1mAffected partitions:\x1b[0m {} partitions",
+            violation.affected_partitions.len()
+        );
 
         if violation.affected_partitions.len() <= 5 {
             for date in &violation.affected_partitions {
@@ -1124,12 +1355,20 @@ fn print_immutability_violations(violations: &[ImmutabilityViolation]) {
         } else {
             let first = violation.affected_partitions.first().unwrap();
             let last = violation.affected_partitions.last().unwrap();
-            eprintln!("  {} to {} ({} partitions)", first, last, violation.affected_partitions.len());
+            eprintln!(
+                "  {} to {} ({} partitions)",
+                first,
+                last,
+                violation.affected_partitions.len()
+            );
         }
 
         eprintln!();
         eprintln!("\x1b[1mDiff:\x1b[0m");
-        eprintln!("{}", format_sql_diff(&violation.stored_sql, &violation.current_sql));
+        eprintln!(
+            "{}",
+            format_sql_diff(&violation.stored_sql, &violation.current_sql)
+        );
         eprintln!();
     }
 
@@ -1152,7 +1391,11 @@ fn cmd_audit(
     let queries = loader.load_dir(queries_path)?;
 
     let queries_to_audit: Vec<_> = match &query_filter {
-        Some(name) => queries.iter().filter(|q| &q.name == name).cloned().collect(),
+        Some(name) => queries
+            .iter()
+            .filter(|q| &q.name == name)
+            .cloned()
+            .collect(),
         None => queries,
     };
 
@@ -1174,7 +1417,12 @@ fn cmd_audit(
     let report = auditor.audit(&stored_states);
 
     let entries_to_show: Vec<_> = if modified_only {
-        report.entries.iter().filter(|e| e.status == SourceStatus::Modified).cloned().collect()
+        report
+            .entries
+            .iter()
+            .filter(|e| e.status == SourceStatus::Modified)
+            .cloned()
+            .collect()
     } else {
         report.entries.clone()
     };
@@ -1200,7 +1448,10 @@ fn cmd_audit(
         OutputFormat::Table => {
             println!("\nSource Audit Report\n");
 
-            let rows: Vec<AuditTableRow> = entries_to_show.iter().map(|e| AuditTableRow::from(e)).collect();
+            let rows: Vec<AuditTableRow> = entries_to_show
+                .iter()
+                .map(|e| AuditTableRow::from(e))
+                .collect();
             let mut table = Table::new(rows);
             table.with(Style::markdown());
             println!("{}", table);
@@ -1270,7 +1521,8 @@ async fn cmd_scratch_promote(
 
     let queries = loader.load_dir(queries_path)?;
 
-    let query = queries.iter()
+    let query = queries
+        .iter()
         .find(|q| q.name == query_name)
         .ok_or_else(|| format!("Query '{}' not found", query_name))?;
 
@@ -1287,7 +1539,9 @@ async fn cmd_scratch_promote(
     let config = ScratchConfig::new(scratch_project.to_string());
     let scratch_writer = ScratchWriter::new(scratch_client, config);
 
-    let stats = scratch_writer.promote_to_production(query, &partition_key, &production_client).await?;
+    let stats = scratch_writer
+        .promote_to_production(query, &partition_key, &production_client)
+        .await?;
 
     println!("\n✓ Promoted {} to production", stats.query_name);
     println!("  From: {}", stats.scratch_table);
@@ -1298,7 +1552,7 @@ async fn cmd_scratch_promote(
 }
 
 async fn run_repl(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
-    use bqdrift::repl::{ReplSession, InteractiveRepl, AsyncJsonRpcServer, ServerConfig};
+    use bqdrift::repl::{AsyncJsonRpcServer, InteractiveRepl, ReplSession, ServerConfig};
 
     let is_tty = atty::is(atty::Stream::Stdin);
     let force_server = cli.server;

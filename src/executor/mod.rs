@@ -1,16 +1,15 @@
+mod bq_executor;
 mod client;
 mod partition_writer;
 mod runner;
 mod scratch;
-mod bq_executor;
 
 pub use client::BqClient;
-pub use partition_writer::{PartitionWriter, PartitionWriteStats};
-pub use runner::{Runner, RunReport, RunFailure};
-pub use scratch::{ScratchConfig, ScratchWriter, ScratchWriteStats, PromoteStats};
+pub use partition_writer::{PartitionWriteStats, PartitionWriter};
+pub use runner::{RunFailure, RunReport, Runner};
+pub use scratch::{PromoteStats, ScratchConfig, ScratchWriteStats, ScratchWriter};
 
 pub use bq_executor::{
-    Executor, ExecutorMode, QueryResult, ColumnDef, ColumnInfo,
-    ExecutorRunner, ExecutorRunReport, ExecutorWriteStats, ExecutorRunFailure,
-    create_mock_executor, create_bigquery_executor,
+    create_bigquery_executor, create_mock_executor, ColumnDef, ColumnInfo, Executor, ExecutorMode,
+    ExecutorRunFailure, ExecutorRunReport, ExecutorRunner, ExecutorWriteStats, QueryResult,
 };

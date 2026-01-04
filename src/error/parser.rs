@@ -1,51 +1,39 @@
-use gcp_bigquery_client::error::{BQError, ResponseError};
 use super::bq_error::{BigQueryError, QueryErrorLocation};
+use gcp_bigquery_client::error::{BQError, ResponseError};
 use regex::Regex;
 
 pub fn parse_bq_error(error: BQError, context: ErrorContext) -> BigQueryError {
     match &error {
         BQError::ResponseError { error: resp } => parse_response_error(resp, context),
 
-        BQError::RequestError(req_err) => {
-            BigQueryError::ConnectionFailed {
-                reason: req_err.to_string(),
-            }
-        }
+        BQError::RequestError(req_err) => BigQueryError::ConnectionFailed {
+            reason: req_err.to_string(),
+        },
 
-        BQError::NoToken => {
-            BigQueryError::AuthenticationFailed {
-                reason: "No authentication token available".to_string(),
-                help: "Ensure you are authenticated with GCP".to_string(),
-            }
-        }
+        BQError::NoToken => BigQueryError::AuthenticationFailed {
+            reason: "No authentication token available".to_string(),
+            help: "Ensure you are authenticated with GCP".to_string(),
+        },
 
-        BQError::AuthError(auth_err) => {
-            BigQueryError::AuthenticationFailed {
-                reason: format!("{:?}", auth_err),
-                help: "Check your authentication configuration".to_string(),
-            }
-        }
+        BQError::AuthError(auth_err) => BigQueryError::AuthenticationFailed {
+            reason: format!("{:?}", auth_err),
+            help: "Check your authentication configuration".to_string(),
+        },
 
-        BQError::YupAuthError(yup_err) => {
-            BigQueryError::AuthenticationFailed {
-                reason: yup_err.to_string(),
-                help: "OAuth authentication failed".to_string(),
-            }
-        }
+        BQError::YupAuthError(yup_err) => BigQueryError::AuthenticationFailed {
+            reason: yup_err.to_string(),
+            help: "OAuth authentication failed".to_string(),
+        },
 
-        BQError::InvalidServiceAccountKey(io_err) => {
-            BigQueryError::InvalidCredentials {
-                path: std::env::var("GOOGLE_APPLICATION_CREDENTIALS").ok(),
-                reason: io_err.to_string(),
-            }
-        }
+        BQError::InvalidServiceAccountKey(io_err) => BigQueryError::InvalidCredentials {
+            path: std::env::var("GOOGLE_APPLICATION_CREDENTIALS").ok(),
+            reason: io_err.to_string(),
+        },
 
-        BQError::InvalidServiceAccountAuthenticator(io_err) => {
-            BigQueryError::InvalidCredentials {
-                path: std::env::var("GOOGLE_APPLICATION_CREDENTIALS").ok(),
-                reason: io_err.to_string(),
-            }
-        }
+        BQError::InvalidServiceAccountAuthenticator(io_err) => BigQueryError::InvalidCredentials {
+            path: std::env::var("GOOGLE_APPLICATION_CREDENTIALS").ok(),
+            reason: io_err.to_string(),
+        },
 
         BQError::InvalidApplicationDefaultCredentialsAuthenticator(io_err) => {
             BigQueryError::AuthenticationFailed {
@@ -54,60 +42,49 @@ pub fn parse_bq_error(error: BQError, context: ErrorContext) -> BigQueryError {
             }
         }
 
-        BQError::NoDataAvailable => {
-            BigQueryError::Unknown {
-                code: None,
-                message: "No data available in response".to_string(),
-                raw_error: error.to_string(),
-            }
-        }
+        BQError::NoDataAvailable => BigQueryError::Unknown {
+            code: None,
+            message: "No data available in response".to_string(),
+            raw_error: error.to_string(),
+        },
 
-        BQError::SerializationError(serde_err) => {
-            BigQueryError::Unknown {
-                code: Some("SERIALIZATION".to_string()),
-                message: serde_err.to_string(),
-                raw_error: error.to_string(),
-            }
-        }
+        BQError::SerializationError(serde_err) => BigQueryError::Unknown {
+            code: Some("SERIALIZATION".to_string()),
+            message: serde_err.to_string(),
+            raw_error: error.to_string(),
+        },
 
-        BQError::ConnectionPoolError(msg) => {
-            BigQueryError::ConnectionFailed {
-                reason: msg.clone(),
-            }
-        }
+        BQError::ConnectionPoolError(msg) => BigQueryError::ConnectionFailed {
+            reason: msg.clone(),
+        },
 
-        BQError::TonicTransportError(tonic_err) => {
-            BigQueryError::ConnectionFailed {
-                reason: tonic_err.to_string(),
-            }
-        }
+        BQError::TonicTransportError(tonic_err) => BigQueryError::ConnectionFailed {
+            reason: tonic_err.to_string(),
+        },
 
-        BQError::TonicStatusError(status) => {
-            BigQueryError::Unknown {
-                code: Some(format!("{:?}", status.code())),
-                message: status.message().to_string(),
-                raw_error: error.to_string(),
-            }
-        }
+        BQError::TonicStatusError(status) => BigQueryError::Unknown {
+            code: Some(format!("{:?}", status.code())),
+            message: status.message().to_string(),
+            raw_error: error.to_string(),
+        },
 
         _ => BigQueryError::Unknown {
             code: None,
             message: error.to_string(),
             raw_error: format!("{:?}", error),
-        }
+        },
     }
 }
 
-fn parse_response_error(
-    resp: &ResponseError,
-    context: ErrorContext,
-) -> BigQueryError {
+fn parse_response_error(resp: &ResponseError, context: ErrorContext) -> BigQueryError {
     let status = resp.error.code;
     let message = &resp.error.message;
     let errors = &resp.error.errors;
 
     // Get the first error reason if available (errors is Vec<HashMap<String, String>>)
-    let reason = errors.first().and_then(|e| e.get("reason").map(|s| s.as_str()));
+    let reason = errors
+        .first()
+        .and_then(|e| e.get("reason").map(|s| s.as_str()));
 
     match (status, reason) {
         // 400 Bad Request
@@ -122,8 +99,8 @@ fn parse_response_error(
 
         (400, Some("invalid")) => {
             // Generic invalid - could be query or other
-            if message.to_lowercase().contains("syntax") ||
-               message.to_lowercase().contains("query") {
+            if message.to_lowercase().contains("syntax") || message.to_lowercase().contains("query")
+            {
                 BigQueryError::InvalidQuery {
                     sql_preview: context.sql.unwrap_or_default(),
                     message: message.clone(),
@@ -138,31 +115,26 @@ fn parse_response_error(
             }
         }
 
-        (400, Some("resourcesExceeded")) => {
-            BigQueryError::ResourcesExceeded {
-                message: message.clone(),
-                suggestion: "Try:\n  \
+        (400, Some("resourcesExceeded")) => BigQueryError::ResourcesExceeded {
+            message: message.clone(),
+            suggestion: "Try:\n  \
                     • Add filters to reduce data scanned\n  \
                     • Use LIMIT clause for testing\n  \
                     • Partition tables by date\n  \
-                    • Break query into smaller parts".to_string(),
-            }
-        }
+                    • Break query into smaller parts"
+                .to_string(),
+        },
 
-        (400, Some("timeout")) => {
-            BigQueryError::Timeout {
-                operation: context.operation.unwrap_or_else(|| "query".to_string()),
-                duration_ms: None,
-            }
-        }
+        (400, Some("timeout")) => BigQueryError::Timeout {
+            operation: context.operation.unwrap_or_else(|| "query".to_string()),
+            duration_ms: None,
+        },
 
-        (400, Some("backendError")) => {
-            BigQueryError::Unknown {
-                code: Some("backendError".to_string()),
-                message: format!("BigQuery backend error: {}", message),
-                raw_error: format!("{:?}", resp),
-            }
-        }
+        (400, Some("backendError")) => BigQueryError::Unknown {
+            code: Some("backendError".to_string()),
+            message: format!("BigQuery backend error: {}", message),
+            raw_error: format!("{:?}", resp),
+        },
 
         // 403 Forbidden
         (403, Some("accessDenied")) => {
@@ -182,45 +154,38 @@ fn parse_response_error(
             }
         }
 
-        (403, Some("responseTooLarge")) => {
-            BigQueryError::ResourcesExceeded {
-                message: message.clone(),
-                suggestion: "Response too large. Try:\n  \
+        (403, Some("responseTooLarge")) => BigQueryError::ResourcesExceeded {
+            message: message.clone(),
+            suggestion: "Response too large. Try:\n  \
                     • Add LIMIT clause\n  \
                     • Export to GCS instead\n  \
-                    • Remove ORDER BY if not needed".to_string(),
-            }
-        }
+                    • Remove ORDER BY if not needed"
+                .to_string(),
+        },
 
         // 404 Not Found
-        (404, _) => {
-            parse_not_found_error(message, &context)
-        }
+        (404, _) => parse_not_found_error(message, &context),
 
         // 409 Conflict
-        (409, Some("duplicate")) => {
-            BigQueryError::Unknown {
-                code: Some("duplicate".to_string()),
-                message: format!("Resource already exists: {}", message),
-                raw_error: format!("{:?}", resp),
-            }
-        }
+        (409, Some("duplicate")) => BigQueryError::Unknown {
+            code: Some("duplicate".to_string()),
+            message: format!("Resource already exists: {}", message),
+            raw_error: format!("{:?}", resp),
+        },
 
         // 500+ Server errors
-        (500..=599, _) => {
-            BigQueryError::Unknown {
-                code: Some(format!("HTTP_{}", status)),
-                message: format!("BigQuery server error: {}", message),
-                raw_error: format!("{:?}", resp),
-            }
-        }
+        (500..=599, _) => BigQueryError::Unknown {
+            code: Some(format!("HTTP_{}", status)),
+            message: format!("BigQuery server error: {}", message),
+            raw_error: format!("{:?}", resp),
+        },
 
         // Default
         _ => BigQueryError::Unknown {
             code: reason.map(|s| s.to_string()),
             message: message.clone(),
             raw_error: format!("{:?}", resp),
-        }
+        },
     }
 }
 
@@ -234,16 +199,26 @@ fn parse_not_found_error(message: &str, context: &ErrorContext) -> BigQueryError
         if let Some(re) = table_re {
             if let Some(caps) = re.captures(message) {
                 return BigQueryError::TableNotFound {
-                    project: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                    dataset: caps.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                    table: caps.get(3).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                    project: caps
+                        .get(1)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
+                    dataset: caps
+                        .get(2)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
+                    table: caps
+                        .get(3)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
                 };
             }
         }
 
         // Fallback with context
         if let (Some(project), Some(dataset), Some(table)) =
-            (&context.project, &context.dataset, &context.table) {
+            (&context.project, &context.dataset, &context.table)
+        {
             return BigQueryError::TableNotFound {
                 project: project.clone(),
                 dataset: dataset.clone(),
@@ -258,8 +233,14 @@ fn parse_not_found_error(message: &str, context: &ErrorContext) -> BigQueryError
         if let Some(re) = dataset_re {
             if let Some(caps) = re.captures(message) {
                 return BigQueryError::DatasetNotFound {
-                    project: caps.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                    dataset: caps.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
+                    project: caps
+                        .get(1)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
+                    dataset: caps
+                        .get(2)
+                        .map(|m| m.as_str().to_string())
+                        .unwrap_or_default(),
                 };
             }
         }
@@ -308,7 +289,8 @@ fn extract_query_location(message: &str) -> Option<QueryErrorLocation> {
 fn extract_required_permission(message: &str) -> Option<String> {
     // Try to extract permission from message like "requires bigquery.tables.getData"
     let perm_re = Regex::new(r"(bigquery\.[a-zA-Z.]+)").ok()?;
-    perm_re.captures(message)
+    perm_re
+        .captures(message)
         .and_then(|caps| caps.get(1))
         .map(|m| m.as_str().to_string())
 }
@@ -360,11 +342,17 @@ impl ErrorContext {
         self
     }
 
-    pub fn with_table(mut self, project: impl Into<String>, dataset: impl Into<String>, table: impl Into<String>) -> Self {
+    pub fn with_table(
+        mut self,
+        project: impl Into<String>,
+        dataset: impl Into<String>,
+        table: impl Into<String>,
+    ) -> Self {
         self.project = Some(project.into());
         self.dataset = Some(dataset.into());
         self.table = Some(table.into());
-        self.resource = Some(format!("{}.{}.{}",
+        self.resource = Some(format!(
+            "{}.{}.{}",
             self.project.as_ref().unwrap(),
             self.dataset.as_ref().unwrap(),
             self.table.as_ref().unwrap()
@@ -492,7 +480,10 @@ mod tests {
         assert_eq!(ctx.project, Some("my-project".to_string()));
         assert_eq!(ctx.dataset, Some("my_dataset".to_string()));
         assert_eq!(ctx.table, Some("my_table".to_string()));
-        assert_eq!(ctx.resource, Some("my-project.my_dataset.my_table".to_string()));
+        assert_eq!(
+            ctx.resource,
+            Some("my-project.my_dataset.my_table".to_string())
+        );
     }
 
     #[test]
@@ -524,7 +515,12 @@ mod tests {
         let ctx = ErrorContext::new();
         let err = parse_not_found_error(msg, &ctx);
 
-        if let BigQueryError::TableNotFound { project, dataset, table } = err {
+        if let BigQueryError::TableNotFound {
+            project,
+            dataset,
+            table,
+        } = err
+        {
             assert_eq!(project, "my-project");
             assert_eq!(dataset, "my_dataset");
             assert_eq!(table, "my_table");
@@ -550,11 +546,15 @@ mod tests {
     #[test]
     fn test_parse_not_found_table_from_context() {
         let msg = "Table not found";
-        let ctx = ErrorContext::new()
-            .with_table("ctx-project", "ctx_dataset", "ctx_table");
+        let ctx = ErrorContext::new().with_table("ctx-project", "ctx_dataset", "ctx_table");
         let err = parse_not_found_error(msg, &ctx);
 
-        if let BigQueryError::TableNotFound { project, dataset, table } = err {
+        if let BigQueryError::TableNotFound {
+            project,
+            dataset,
+            table,
+        } = err
+        {
             assert_eq!(project, "ctx-project");
             assert_eq!(dataset, "ctx_dataset");
             assert_eq!(table, "ctx_table");

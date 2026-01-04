@@ -1,9 +1,9 @@
-pub use bq_runner::{Executor, ExecutorMode, QueryResult, ColumnDef, ColumnInfo};
+pub use crate::bq_runner::{ColumnDef, ColumnInfo, Executor, ExecutorMode, QueryResult};
 
-use chrono::{NaiveDate, Utc};
-use crate::error::{BqDriftError, Result};
 use crate::dsl::QueryDef;
+use crate::error::{BqDriftError, Result};
 use crate::schema::PartitionKey;
+use chrono::{NaiveDate, Utc};
 
 #[derive(Debug)]
 pub struct ExecutorRunReport {
@@ -48,7 +48,10 @@ impl<'a> ExecutorRunner<'a> {
         self.run_for_partition(PartitionKey::Day(date)).await
     }
 
-    pub async fn run_for_partition(&self, partition_key: PartitionKey) -> Result<ExecutorRunReport> {
+    pub async fn run_for_partition(
+        &self,
+        partition_key: PartitionKey,
+    ) -> Result<ExecutorRunReport> {
         let mut stats = Vec::new();
         let mut failures = Vec::new();
 
@@ -67,16 +70,20 @@ impl<'a> ExecutorRunner<'a> {
     }
 
     pub async fn run_query(&self, query_name: &str, date: NaiveDate) -> Result<ExecutorWriteStats> {
-        self.run_query_partition(query_name, PartitionKey::Day(date)).await
+        self.run_query_partition(query_name, PartitionKey::Day(date))
+            .await
     }
 
-    pub async fn run_query_partition(&self, query_name: &str, partition_key: PartitionKey) -> Result<ExecutorWriteStats> {
-        let query = self.queries
+    pub async fn run_query_partition(
+        &self,
+        query_name: &str,
+        partition_key: PartitionKey,
+    ) -> Result<ExecutorWriteStats> {
+        let query = self
+            .queries
             .iter()
             .find(|q| q.name == query_name)
-            .ok_or_else(|| BqDriftError::DslParse(
-                format!("Query '{}' not found", query_name)
-            ))?;
+            .ok_or_else(|| BqDriftError::DslParse(format!("Query '{}' not found", query_name)))?;
 
         self.execute_query(query, partition_key).await
     }
@@ -92,7 +99,8 @@ impl<'a> ExecutorRunner<'a> {
             PartitionKey::Day(from),
             PartitionKey::Day(to),
             None,
-        ).await
+        )
+        .await
     }
 
     pub async fn backfill_partitions(
@@ -102,12 +110,11 @@ impl<'a> ExecutorRunner<'a> {
         to: PartitionKey,
         interval: Option<i64>,
     ) -> Result<ExecutorRunReport> {
-        let query = self.queries
+        let query = self
+            .queries
             .iter()
             .find(|q| q.name == query_name)
-            .ok_or_else(|| BqDriftError::DslParse(
-                format!("Query '{}' not found", query_name)
-            ))?;
+            .ok_or_else(|| BqDriftError::DslParse(format!("Query '{}' not found", query_name)))?;
 
         let mut stats = Vec::new();
         let mut failures = Vec::new();
@@ -149,18 +156,23 @@ impl<'a> ExecutorRunner<'a> {
             .map_err(|e| BqDriftError::Executor(e.to_string()))
     }
 
-    async fn execute_query(&self, query_def: &QueryDef, partition_key: PartitionKey) -> Result<ExecutorWriteStats> {
+    async fn execute_query(
+        &self,
+        query_def: &QueryDef,
+        partition_key: PartitionKey,
+    ) -> Result<ExecutorWriteStats> {
         let partition_date = partition_key.to_naive_date();
         let version = query_def
             .get_version_for_date(partition_date)
-            .ok_or_else(|| BqDriftError::Partition(
-                format!("No version found for partition {}", partition_key)
-            ))?;
+            .ok_or_else(|| {
+                BqDriftError::Partition(format!("No version found for partition {}", partition_key))
+            })?;
 
         let sql = version.get_sql_for_date(Utc::now().date_naive());
         let full_sql = self.build_merge_sql(query_def, sql, &partition_key);
 
-        let rows_affected = self.executor
+        let rows_affected = self
+            .executor
             .execute(&full_sql)
             .await
             .map_err(|e| BqDriftError::Executor(e.to_string()))?;
@@ -180,8 +192,7 @@ impl<'a> ExecutorRunner<'a> {
     ) -> String {
         let dest_table = format!(
             "{}.{}",
-            query_def.destination.dataset,
-            query_def.destination.table
+            query_def.destination.dataset, query_def.destination.table
         );
 
         let partition_field = query_def
@@ -191,7 +202,10 @@ impl<'a> ExecutorRunner<'a> {
             .as_deref()
             .unwrap_or("date");
 
-        let parameterized_sql = sql.replace("@partition_date", &format!("'{}'", partition_key.sql_value()));
+        let parameterized_sql = sql.replace(
+            "@partition_date",
+            &format!("'{}'", partition_key.sql_value()),
+        );
 
         let partition_condition = match partition_key {
             PartitionKey::Hour(_) => format!(

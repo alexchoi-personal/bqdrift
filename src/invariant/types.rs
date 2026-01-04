@@ -160,7 +160,11 @@ severity: error
 "#;
         let inv: InvariantDef = serde_yaml::from_str(yaml).unwrap();
         match inv.check {
-            InvariantCheck::RowCount { source: Some(sql), min, .. } => {
+            InvariantCheck::RowCount {
+                source: Some(sql),
+                min,
+                ..
+            } => {
                 assert_eq!(sql, "SELECT * FROM filtered_table");
                 assert_eq!(min, Some(50));
             }
@@ -179,7 +183,11 @@ severity: warning
 "#;
         let inv: InvariantDef = serde_yaml::from_str(yaml).unwrap();
         match inv.check {
-            InvariantCheck::NullPercentage { source, column, max_percentage } => {
+            InvariantCheck::NullPercentage {
+                source,
+                column,
+                max_percentage,
+            } => {
                 assert!(source.is_none());
                 assert_eq!(column, "user_count");
                 assert!((max_percentage - 5.0).abs() < 0.001);
@@ -200,7 +208,9 @@ severity: warning
 "#;
         let inv: InvariantDef = serde_yaml::from_str(yaml).unwrap();
         match inv.check {
-            InvariantCheck::ValueRange { column, min, max, .. } => {
+            InvariantCheck::ValueRange {
+                column, min, max, ..
+            } => {
                 assert_eq!(column, "revenue");
                 assert_eq!(min, Some(0.0));
                 assert_eq!(max, Some(1000000.0));
@@ -221,7 +231,9 @@ severity: warning
 "#;
         let inv: InvariantDef = serde_yaml::from_str(yaml).unwrap();
         match inv.check {
-            InvariantCheck::DistinctCount { column, min, max, .. } => {
+            InvariantCheck::DistinctCount {
+                column, min, max, ..
+            } => {
                 assert_eq!(column, "region");
                 assert_eq!(min, Some(1));
                 assert_eq!(max, Some(100));
@@ -370,7 +382,11 @@ severity: warning
 "#;
         let inv: InvariantDef = serde_yaml::from_str(yaml).unwrap();
         match inv.check {
-            InvariantCheck::RowCount { source: Some(sql), min, .. } => {
+            InvariantCheck::RowCount {
+                source: Some(sql),
+                min,
+                ..
+            } => {
                 assert!(sql.contains("SELECT * FROM my_table"));
                 assert_eq!(min, Some(10));
             }

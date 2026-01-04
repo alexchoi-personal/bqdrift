@@ -1,12 +1,14 @@
+use super::commands::ReplCommand;
+use super::protocol::{
+    JsonRpcRequest, JsonRpcResponse, ServerConfigInfo, SessionInfo, SESSION_EXPIRED, SESSION_LIMIT,
+};
+use super::session::ReplSession;
+use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::Arc;
-use chrono::{DateTime, Utc, Duration};
 use tokio::sync::{mpsc, oneshot};
-use super::commands::ReplCommand;
-use super::protocol::{JsonRpcRequest, JsonRpcResponse, SessionInfo, ServerConfigInfo, SESSION_EXPIRED, SESSION_LIMIT};
-use super::session::ReplSession;
 
 pub struct ServerConfig {
     pub default_project: Option<String>,
@@ -103,7 +105,8 @@ pub struct SessionHandle {
 
 impl SessionHandle {
     pub fn touch(&self) {
-        self.last_activity.store(Utc::now().timestamp(), Ordering::Relaxed);
+        self.last_activity
+            .store(Utc::now().timestamp(), Ordering::Relaxed);
     }
 
     pub fn last_activity_time(&self) -> DateTime<Utc> {
@@ -128,7 +131,10 @@ impl SessionHandle {
             idle_timeout_secs: self.idle_timeout_secs,
             expires_at: self.expires_at().to_rfc3339(),
             project: self.project.clone(),
-            queries_path: self.queries_path.as_ref().map(|p| p.to_string_lossy().to_string()),
+            queries_path: self
+                .queries_path
+                .as_ref()
+                .map(|p| p.to_string_lossy().to_string()),
             metadata: self.metadata.clone(),
         }
     }
@@ -162,7 +168,8 @@ impl SessionActor {
 
     async fn run(mut self) {
         while let Some(req) = self.request_rx.recv().await {
-            self.last_activity.store(Utc::now().timestamp(), Ordering::Relaxed);
+            self.last_activity
+                .store(Utc::now().timestamp(), Ordering::Relaxed);
             self.request_count.fetch_add(1, Ordering::Relaxed);
             let response = self.handle_request(req.request).await;
             let _ = req.response_tx.send(response);
@@ -226,7 +233,11 @@ impl SessionManager {
             default_idle_timeout_secs: self.config.default_idle_timeout_secs,
             max_idle_timeout_secs: self.config.max_idle_timeout_secs,
             default_project: self.config.default_project.clone(),
-            default_queries_path: self.config.default_queries_path.to_string_lossy().to_string(),
+            default_queries_path: self
+                .config
+                .default_queries_path
+                .to_string_lossy()
+                .to_string(),
         }
     }
 
@@ -253,7 +264,10 @@ impl SessionManager {
         Ok(self.sessions.get(session_id).unwrap())
     }
 
-    pub fn create_session_with_params(&mut self, params: SessionCreateParams) -> Result<SessionInfo, JsonRpcResponse> {
+    pub fn create_session_with_params(
+        &mut self,
+        params: SessionCreateParams,
+    ) -> Result<SessionInfo, JsonRpcResponse> {
         if !self.can_create_session() {
             return Err(JsonRpcResponse::error(
                 None,
@@ -262,7 +276,9 @@ impl SessionManager {
             ));
         }
 
-        let session_id = params.session_id.clone()
+        let session_id = params
+            .session_id
+            .clone()
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
         if self.sessions.contains_key(&session_id) {
@@ -276,13 +292,20 @@ impl SessionManager {
     }
 
     fn create_session(&self, params: SessionCreateParams) -> SessionHandle {
-        let id = params.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        let id = params
+            .session_id
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
-        let project = params.project.or_else(|| self.config.default_project.clone());
-        let queries_path = params.queries_path.clone()
+        let project = params
+            .project
+            .or_else(|| self.config.default_project.clone());
+        let queries_path = params
+            .queries_path
+            .clone()
             .unwrap_or_else(|| self.config.default_queries_path.clone());
 
-        let idle_timeout = params.idle_timeout_secs
+        let idle_timeout = params
+            .idle_timeout_secs
             .map(|t| t.min(self.config.max_idle_timeout_secs))
             .unwrap_or(self.config.default_idle_timeout_secs);
 
@@ -377,7 +400,8 @@ impl SessionManager {
     }
 
     pub fn cleanup_expired(&mut self) -> usize {
-        let expired: Vec<String> = self.sessions
+        let expired: Vec<String> = self
+            .sessions
             .iter()
             .filter(|(_, h)| h.is_expired())
             .map(|(id, _)| id.clone())

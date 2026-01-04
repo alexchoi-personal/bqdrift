@@ -1,5 +1,5 @@
-use crate::schema::BqType;
 use super::parser::QueryDef;
+use crate::schema::BqType;
 
 #[derive(Debug, Clone)]
 pub struct ValidationResult {
@@ -108,7 +108,11 @@ impl QueryValidator {
         }
     }
 
-    fn check_record_field_recursive(field: &crate::schema::Field, version: u32, errors: &mut Vec<ValidationError>) {
+    fn check_record_field_recursive(
+        field: &crate::schema::Field,
+        version: u32,
+        errors: &mut Vec<ValidationError>,
+    ) {
         if field.field_type == BqType::Record {
             match &field.fields {
                 None => {
@@ -203,8 +207,10 @@ impl QueryValidator {
                             code: "W004",
                             message: format!(
                                 "v{}: field '{}' type changed from {:?} to {:?}",
-                                curr.version, prev_field.name,
-                                prev_field.field_type, curr_field.field_type
+                                curr.version,
+                                prev_field.name,
+                                prev_field.field_type,
+                                curr_field.field_type
                             ),
                         });
                     }
@@ -217,7 +223,8 @@ impl QueryValidator {
         for version in &query.versions {
             if !version.sql_content.contains("@partition_date")
                 && !version.sql_content.contains("@run_date")
-                && !version.sql_content.contains("@execution_date") {
+                && !version.sql_content.contains("@execution_date")
+            {
                 warnings.push(ValidationWarning {
                     code: "W005",
                     message: format!(
@@ -230,7 +237,8 @@ impl QueryValidator {
             for revision in &version.revisions {
                 if !revision.sql_content.contains("@partition_date")
                     && !revision.sql_content.contains("@run_date")
-                    && !revision.sql_content.contains("@execution_date") {
+                    && !revision.sql_content.contains("@execution_date")
+                {
                     warnings.push(ValidationWarning {
                         code: "W005",
                         message: format!(
@@ -264,7 +272,9 @@ mod tests {
     #[test]
     fn test_validate_simple_query() {
         let loader = QueryLoader::new();
-        let query = loader.load_query(Path::new("tests/fixtures/analytics/simple_query.yaml")).unwrap();
+        let query = loader
+            .load_query(Path::new("tests/fixtures/analytics/simple_query.yaml"))
+            .unwrap();
         let result = QueryValidator::validate(&query);
 
         assert!(result.is_valid());
@@ -273,7 +283,9 @@ mod tests {
     #[test]
     fn test_validate_versioned_query() {
         let loader = QueryLoader::new();
-        let query = loader.load_query(Path::new("tests/fixtures/analytics/versioned_query.yaml")).unwrap();
+        let query = loader
+            .load_query(Path::new("tests/fixtures/analytics/versioned_query.yaml"))
+            .unwrap();
         let result = QueryValidator::validate(&query);
 
         assert!(result.is_valid());

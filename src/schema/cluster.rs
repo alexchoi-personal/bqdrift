@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::error::{BqDriftError, Result};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClusterConfig {
@@ -10,7 +10,7 @@ impl ClusterConfig {
     pub fn new(fields: Vec<String>) -> Result<Self> {
         if fields.len() > 4 {
             return Err(BqDriftError::Cluster(
-                "BigQuery supports maximum 4 clustering fields".into()
+                "BigQuery supports maximum 4 clustering fields".into(),
             ));
         }
         Ok(Self { fields })

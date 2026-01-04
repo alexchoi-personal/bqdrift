@@ -1,11 +1,11 @@
-use std::path::PathBuf;
-use chrono::{Datelike, Timelike, NaiveDate, Utc};
-use crate::error::{BqDriftError, Result};
-use crate::dsl::{QueryDef, QueryLoader, QueryValidator};
-use crate::schema::{PartitionKey, PartitionType};
-use crate::executor::BqClient;
-use crate::invariant::{InvariantChecker, CheckStatus, Severity, resolve_invariants_def};
 use super::commands::{ReplCommand, ReplResult};
+use crate::dsl::{QueryDef, QueryLoader, QueryValidator};
+use crate::error::{BqDriftError, Result};
+use crate::executor::BqClient;
+use crate::invariant::{resolve_invariants_def, CheckStatus, InvariantChecker, Severity};
+use crate::schema::{PartitionKey, PartitionType};
+use chrono::{Datelike, NaiveDate, Timelike, Utc};
+use std::path::PathBuf;
 
 pub struct ReplSession {
     project: Option<String>,
@@ -55,8 +55,11 @@ impl ReplSession {
     }
 
     async fn ensure_client(&mut self) -> Result<&BqClient> {
-        let project = self.project.as_ref()
-            .ok_or_else(|| BqDriftError::Repl("No project set. Use --project flag or set GCP_PROJECT_ID".to_string()))?;
+        let project = self.project.as_ref().ok_or_else(|| {
+            BqDriftError::Repl(
+                "No project set. Use --project flag or set GCP_PROJECT_ID".to_string(),
+            )
+        })?;
 
         if self.client.is_none() {
             let client = BqClient::new(project).await?;
@@ -81,29 +84,65 @@ impl ReplSession {
             ReplCommand::Validate => self.cmd_validate(),
             ReplCommand::List { detailed } => self.cmd_list(detailed),
             ReplCommand::Show { query, version } => self.cmd_show(&query, version),
-            ReplCommand::Run { query, partition, dry_run, skip_invariants, scratch, scratch_ttl } => {
-                self.cmd_run(query, partition, dry_run, skip_invariants, scratch, scratch_ttl).await
+            ReplCommand::Run {
+                query,
+                partition,
+                dry_run,
+                skip_invariants,
+                scratch,
+                scratch_ttl,
+            } => {
+                self.cmd_run(
+                    query,
+                    partition,
+                    dry_run,
+                    skip_invariants,
+                    scratch,
+                    scratch_ttl,
+                )
+                .await
             }
-            ReplCommand::Backfill { query, from, to, dry_run, skip_invariants } => {
-                self.cmd_backfill(&query, &from, &to, dry_run, skip_invariants).await
+            ReplCommand::Backfill {
+                query,
+                from,
+                to,
+                dry_run,
+                skip_invariants,
+            } => {
+                self.cmd_backfill(&query, &from, &to, dry_run, skip_invariants)
+                    .await
             }
-            ReplCommand::Check { query, partition, before, after } => {
-                self.cmd_check(&query, partition, before, after).await
+            ReplCommand::Check {
+                query,
+                partition,
+                before,
+                after,
+            } => self.cmd_check(&query, partition, before, after).await,
+            ReplCommand::Init { dataset } => self.cmd_init(&dataset).await,
+            ReplCommand::Sync {
+                from,
+                to,
+                dry_run,
+                tracking_dataset,
+                allow_source_mutation,
+            } => {
+                self.cmd_sync(from, to, dry_run, &tracking_dataset, allow_source_mutation)
+                    .await
             }
-            ReplCommand::Init { dataset } => {
-                self.cmd_init(&dataset).await
-            }
-            ReplCommand::Sync { from, to, dry_run, tracking_dataset, allow_source_mutation } => {
-                self.cmd_sync(from, to, dry_run, &tracking_dataset, allow_source_mutation).await
-            }
-            ReplCommand::Audit { query, modified_only, diff, output } => {
-                self.cmd_audit(query, modified_only, diff, &output)
-            }
-            ReplCommand::ScratchList { project } => {
-                self.cmd_scratch_list(&project).await
-            }
-            ReplCommand::ScratchPromote { query, partition, scratch_project } => {
-                self.cmd_scratch_promote(&query, &partition, &scratch_project).await
+            ReplCommand::Audit {
+                query,
+                modified_only,
+                diff,
+                output,
+            } => self.cmd_audit(query, modified_only, diff, &output),
+            ReplCommand::ScratchList { project } => self.cmd_scratch_list(&project).await,
+            ReplCommand::ScratchPromote {
+                query,
+                partition,
+                scratch_project,
+            } => {
+                self.cmd_scratch_promote(&query, &partition, &scratch_project)
+                    .await
             }
         }
     }
@@ -136,7 +175,11 @@ impl ReplSession {
     fn cmd_status(&self) -> ReplResult {
         let project_str = self.project.as_deref().unwrap_or("(not set)");
         let queries_count = self.cached_queries.as_ref().map(|q| q.len()).unwrap_or(0);
-        let client_status = if self.client.is_some() { "connected" } else { "not connected" };
+        let client_status = if self.client.is_some() {
+            "connected"
+        } else {
+            "not connected"
+        };
 
         let output = format!(
             "Project: {}\nQueries path: {}\nQueries loaded: {}\nClient: {}",
@@ -181,7 +224,11 @@ impl ReplSession {
         for query in &queries {
             let result = QueryValidator::validate(query);
             let status = if result.is_valid() {
-                if result.has_warnings() { "⚠" } else { "✓" }
+                if result.has_warnings() {
+                    "⚠"
+                } else {
+                    "✓"
+                }
             } else {
                 "✗"
             };
@@ -207,11 +254,21 @@ impl ReplSession {
         }
 
         if total_errors > 0 {
-            output_lines.push(format!("\n✗ Validation failed: {} errors, {} warnings", total_errors, total_warnings));
+            output_lines.push(format!(
+                "\n✗ Validation failed: {} errors, {} warnings",
+                total_errors, total_warnings
+            ));
         } else if total_warnings > 0 {
-            output_lines.push(format!("\n⚠ {} queries validated with {} warnings", queries.len(), total_warnings));
+            output_lines.push(format!(
+                "\n⚠ {} queries validated with {} warnings",
+                queries.len(),
+                total_warnings
+            ));
         } else {
-            output_lines.push(format!("\n✓ {} queries validated successfully", queries.len()));
+            output_lines.push(format!(
+                "\n✓ {} queries validated successfully",
+                queries.len()
+            ));
         }
 
         let data = serde_json::json!({
@@ -240,7 +297,10 @@ impl ReplSession {
         };
 
         if queries.is_empty() {
-            return ReplResult::success_with_output(format!("No queries found in {}", self.queries_path.display()));
+            return ReplResult::success_with_output(format!(
+                "No queries found in {}",
+                self.queries_path.display()
+            ));
         }
 
         let mut output_lines = Vec::new();
@@ -249,7 +309,10 @@ impl ReplSession {
         for query in &queries {
             if detailed {
                 output_lines.push(query.name.clone());
-                output_lines.push(format!("  destination: {}.{}", query.destination.dataset, query.destination.table));
+                output_lines.push(format!(
+                    "  destination: {}.{}",
+                    query.destination.dataset, query.destination.table
+                ));
                 if let Some(desc) = &query.description {
                     output_lines.push(format!("  description: {}", desc));
                 }
@@ -258,16 +321,17 @@ impl ReplSession {
                 }
                 output_lines.push(format!("  versions: {}", query.versions.len()));
                 if let Some(latest) = query.latest_version() {
-                    output_lines.push(format!("  latest: v{} (effective {})", latest.version, latest.effective_from));
+                    output_lines.push(format!(
+                        "  latest: v{} (effective {})",
+                        latest.version, latest.effective_from
+                    ));
                 }
                 output_lines.push(String::new());
             } else {
                 let latest = query.latest_version().map(|v| v.version).unwrap_or(0);
-                output_lines.push(format!("{:<30} v{:<3} {}.{}",
-                    query.name,
-                    latest,
-                    query.destination.dataset,
-                    query.destination.table
+                output_lines.push(format!(
+                    "{:<30} v{:<3} {}.{}",
+                    query.name, latest, query.destination.dataset, query.destination.table
                 ));
             }
 
@@ -301,7 +365,10 @@ impl ReplSession {
 
         let mut output_lines = Vec::new();
         output_lines.push(format!("Name: {}", query.name));
-        output_lines.push(format!("Destination: {}.{}", query.destination.dataset, query.destination.table));
+        output_lines.push(format!(
+            "Destination: {}.{}",
+            query.destination.dataset, query.destination.table
+        ));
 
         if let Some(desc) = &query.description {
             output_lines.push(format!("Description: {}", desc));
@@ -311,8 +378,19 @@ impl ReplSession {
         }
 
         output_lines.push(format!("\nPartition:"));
-        output_lines.push(format!("  field: {}", query.destination.partition.field.as_deref().unwrap_or("_PARTITIONTIME")));
-        output_lines.push(format!("  type: {:?}", query.destination.partition.partition_type));
+        output_lines.push(format!(
+            "  field: {}",
+            query
+                .destination
+                .partition
+                .field
+                .as_deref()
+                .unwrap_or("_PARTITIONTIME")
+        ));
+        output_lines.push(format!(
+            "  type: {:?}",
+            query.destination.partition.partition_type
+        ));
 
         if let Some(cluster) = &query.cluster {
             output_lines.push(format!("\nCluster: {}", cluster.fields.join(", ")));
@@ -370,7 +448,16 @@ impl ReplSession {
         }
 
         if let Some(scratch_project) = scratch {
-            return self.cmd_run_scratch(query_name, partition, skip_invariants, scratch_project, scratch_ttl, &queries).await;
+            return self
+                .cmd_run_scratch(
+                    query_name,
+                    partition,
+                    skip_invariants,
+                    scratch_project,
+                    scratch_ttl,
+                    &queries,
+                )
+                .await;
         }
 
         let client = match self.ensure_client().await {
@@ -392,9 +479,15 @@ impl ReplSession {
                     Err(e) => return ReplResult::failure(e),
                 };
 
-                match runner.run_query_partition(&name, partition_key.clone()).await {
+                match runner
+                    .run_query_partition(&name, partition_key.clone())
+                    .await
+                {
                     Ok(stats) => {
-                        let output = format!("✓ {} v{} completed for {}", stats.query_name, stats.version, stats.partition_key);
+                        let output = format!(
+                            "✓ {} v{} completed for {}",
+                            stats.query_name, stats.version, stats.partition_key
+                        );
                         let data = serde_json::json!({
                             "query": stats.query_name,
                             "version": stats.version,
@@ -415,12 +508,22 @@ impl ReplSession {
                     Ok(report) => {
                         let mut output_lines = Vec::new();
                         for stats in &report.stats {
-                            output_lines.push(format!("✓ {} v{} completed for {}", stats.query_name, stats.version, stats.partition_key));
+                            output_lines.push(format!(
+                                "✓ {} v{} completed for {}",
+                                stats.query_name, stats.version, stats.partition_key
+                            ));
                         }
                         for failure in &report.failures {
-                            output_lines.push(format!("✗ {} ({}): {}", failure.query_name, failure.partition_key, failure.error));
+                            output_lines.push(format!(
+                                "✗ {} ({}): {}",
+                                failure.query_name, failure.partition_key, failure.error
+                            ));
                         }
-                        output_lines.push(format!("\n{} succeeded, {} failed", report.stats.len(), report.failures.len()));
+                        output_lines.push(format!(
+                            "\n{} succeeded, {} failed",
+                            report.stats.len(),
+                            report.failures.len()
+                        ));
 
                         let data = serde_json::json!({
                             "succeeded": report.stats.len(),
@@ -464,20 +567,29 @@ impl ReplSession {
             };
 
             output_lines.push(format!("Query: {}", query.name));
-            output_lines.push(format!("Destination: {}.{}", query.destination.dataset, query.destination.table));
+            output_lines.push(format!(
+                "Destination: {}.{}",
+                query.destination.dataset, query.destination.table
+            ));
             output_lines.push(format!("Partition type: {:?}", partition_type));
 
             let date_for_version = partition_key.to_naive_date();
             if let Some(version) = query.get_version_for_date(date_for_version) {
                 output_lines.push(format!("Version: {}", version.version));
                 output_lines.push(format!("Source: {}", version.source));
-                output_lines.push(format!("\n--- SQL ---\n{}\n-----------\n", version.get_sql_for_date(date_for_version)));
+                output_lines.push(format!(
+                    "\n--- SQL ---\n{}\n-----------\n",
+                    version.get_sql_for_date(date_for_version)
+                ));
 
                 if !skip_invariants {
                     let before_count = version.invariants.before.len();
                     let after_count = version.invariants.after.len();
                     if before_count > 0 || after_count > 0 {
-                        output_lines.push(format!("Invariants: {} before, {} after", before_count, after_count));
+                        output_lines.push(format!(
+                            "Invariants: {} before, {} after",
+                            before_count, after_count
+                        ));
                     }
                 }
 
@@ -528,7 +640,9 @@ impl ReplSession {
 
         let scratch_client = match BqClient::new(&scratch_project).await {
             Ok(c) => c,
-            Err(e) => return ReplResult::failure(format!("Failed to create scratch client: {}", e)),
+            Err(e) => {
+                return ReplResult::failure(format!("Failed to create scratch client: {}", e))
+            }
         };
 
         let mut config = ScratchConfig::new(scratch_project.clone());
@@ -542,15 +656,27 @@ impl ReplSession {
             return ReplResult::failure(format!("Failed to ensure scratch dataset: {}", e));
         }
 
-        match scratch_writer.write_partition(&query, partition_key.clone(), !skip_invariants).await {
+        match scratch_writer
+            .write_partition(&query, partition_key.clone(), !skip_invariants)
+            .await
+        {
             Ok(stats) => {
                 let mut output_lines = Vec::new();
-                output_lines.push(format!("✓ {} v{} completed (scratch)", stats.query_name, stats.version));
+                output_lines.push(format!(
+                    "✓ {} v{} completed (scratch)",
+                    stats.query_name, stats.version
+                ));
                 output_lines.push(format!("  Destination: {}", stats.scratch_table));
                 output_lines.push(format!("  Partition: {}", stats.partition_key));
-                output_lines.push(format!("  Expires: {}", stats.expiration.format("%Y-%m-%dT%H:%M:%SZ")));
+                output_lines.push(format!(
+                    "  Expires: {}",
+                    stats.expiration.format("%Y-%m-%dT%H:%M:%SZ")
+                ));
                 output_lines.push(format!("\nTo promote to production:"));
-                output_lines.push(format!("  scratch promote --query {} --partition {} --scratch-project {}", stats.query_name, stats.partition_key, scratch_project));
+                output_lines.push(format!(
+                    "  scratch promote --query {} --partition {} --scratch-project {}",
+                    stats.query_name, stats.partition_key, scratch_project
+                ));
 
                 let data = serde_json::json!({
                     "query": stats.query_name,
@@ -599,7 +725,10 @@ impl ReplSession {
             while current <= to_key {
                 let date = current.to_naive_date();
                 if let Some(version) = query.get_version_for_date(date) {
-                    output_lines.push(format!("{}: v{} ({})", current, version.version, version.source));
+                    output_lines.push(format!(
+                        "{}: v{} ({})",
+                        current, version.version, version.source
+                    ));
                 } else {
                     output_lines.push(format!("{}: no version available", current));
                 }
@@ -617,16 +746,26 @@ impl ReplSession {
 
         let runner = crate::Runner::new(client.clone(), queries);
 
-        match runner.backfill_partitions(query_name, from_key, to_key, None).await {
+        match runner
+            .backfill_partitions(query_name, from_key, to_key, None)
+            .await
+        {
             Ok(report) => {
                 let mut output_lines = Vec::new();
                 for stats in &report.stats {
-                    output_lines.push(format!("✓ {} v{} completed for {}", stats.query_name, stats.version, stats.partition_key));
+                    output_lines.push(format!(
+                        "✓ {} v{} completed for {}",
+                        stats.query_name, stats.version, stats.partition_key
+                    ));
                 }
                 for failure in &report.failures {
                     output_lines.push(format!("✗ {}: {}", failure.partition_key, failure.error));
                 }
-                output_lines.push(format!("\n{} succeeded, {} failed", report.stats.len(), report.failures.len()));
+                output_lines.push(format!(
+                    "\n{} succeeded, {} failed",
+                    report.stats.len(),
+                    report.failures.len()
+                ));
 
                 let data = serde_json::json!({
                     "succeeded": report.stats.len(),
@@ -664,7 +803,12 @@ impl ReplSession {
 
         let version = match query.get_version_for_date(date_for_version) {
             Some(v) => v,
-            None => return ReplResult::failure(format!("No version found for date {}", date_for_version)),
+            None => {
+                return ReplResult::failure(format!(
+                    "No version found for date {}",
+                    date_for_version
+                ))
+            }
         };
 
         let (before_checks, after_checks) = resolve_invariants_def(&version.invariants);
@@ -682,7 +826,10 @@ impl ReplSession {
         let mut total_failed = 0;
         let mut has_errors = false;
 
-        output_lines.push(format!("Running invariant checks for '{}' v{} on {}", query.name, version.version, partition_key));
+        output_lines.push(format!(
+            "Running invariant checks for '{}' v{} on {}",
+            query.name, version.version, partition_key
+        ));
 
         if (run_all || run_before) && !before_checks.is_empty() {
             output_lines.push("\nBefore checks:".to_string());
@@ -690,15 +837,23 @@ impl ReplSession {
                 Ok(results) => {
                     for result in &results {
                         let icon = match result.status {
-                            CheckStatus::Passed => { total_passed += 1; "✓" }
+                            CheckStatus::Passed => {
+                                total_passed += 1;
+                                "✓"
+                            }
                             CheckStatus::Failed => {
                                 total_failed += 1;
-                                if result.severity == Severity::Error { has_errors = true; "✗" }
-                                else { "⚠" }
+                                if result.severity == Severity::Error {
+                                    has_errors = true;
+                                    "✗"
+                                } else {
+                                    "⚠"
+                                }
                             }
                             CheckStatus::Skipped => "○",
                         };
-                        output_lines.push(format!("  {} {}: {}", icon, result.name, result.message));
+                        output_lines
+                            .push(format!("  {} {}: {}", icon, result.name, result.message));
                     }
                 }
                 Err(e) => return ReplResult::failure(e.to_string()),
@@ -711,15 +866,23 @@ impl ReplSession {
                 Ok(results) => {
                     for result in &results {
                         let icon = match result.status {
-                            CheckStatus::Passed => { total_passed += 1; "✓" }
+                            CheckStatus::Passed => {
+                                total_passed += 1;
+                                "✓"
+                            }
                             CheckStatus::Failed => {
                                 total_failed += 1;
-                                if result.severity == Severity::Error { has_errors = true; "✗" }
-                                else { "⚠" }
+                                if result.severity == Severity::Error {
+                                    has_errors = true;
+                                    "✗"
+                                } else {
+                                    "⚠"
+                                }
                             }
                             CheckStatus::Skipped => "○",
                         };
-                        output_lines.push(format!("  {} {}: {}", icon, result.name, result.message));
+                        output_lines
+                            .push(format!("  {} {}: {}", icon, result.name, result.message));
                     }
                 }
                 Err(e) => return ReplResult::failure(e.to_string()),
@@ -729,7 +892,10 @@ impl ReplSession {
         if total_passed == 0 && total_failed == 0 {
             output_lines.push("\nNo invariant checks defined for this query/version.".to_string());
         } else {
-            output_lines.push(format!("\n{} passed, {} failed", total_passed, total_failed));
+            output_lines.push(format!(
+                "\n{} passed, {} failed",
+                total_passed, total_failed
+            ));
         }
 
         let data = serde_json::json!({
@@ -824,7 +990,10 @@ impl ReplSession {
         }
 
         if dry_run {
-            output_lines.push(format!("\nRun without --dry-run to execute {} drifted partitions", drifted.len()));
+            output_lines.push(format!(
+                "\nRun without --dry-run to execute {} drifted partitions",
+                drifted.len()
+            ));
         } else {
             output_lines.push("\nSync execution not yet implemented.".to_string());
         }
@@ -849,7 +1018,11 @@ impl ReplSession {
         };
 
         let queries_to_audit: Vec<_> = match &query_filter {
-            Some(name) => queries.iter().filter(|q| &q.name == name).cloned().collect(),
+            Some(name) => queries
+                .iter()
+                .filter(|q| &q.name == name)
+                .cloned()
+                .collect(),
             None => queries,
         };
 
@@ -865,30 +1038,34 @@ impl ReplSession {
         let report = auditor.audit(&stored_states);
 
         let entries_to_show: Vec<_> = if modified_only {
-            report.entries.iter().filter(|e| e.status == crate::SourceStatus::Modified).cloned().collect()
+            report
+                .entries
+                .iter()
+                .filter(|e| e.status == crate::SourceStatus::Modified)
+                .cloned()
+                .collect()
         } else {
             report.entries.clone()
         };
 
         match output {
-            "json" => {
-                match serde_json::to_string_pretty(&entries_to_show) {
-                    Ok(json) => ReplResult::success_with_output(json),
-                    Err(e) => ReplResult::failure(e.to_string()),
-                }
-            }
-            "yaml" => {
-                match serde_yaml::to_string(&entries_to_show) {
-                    Ok(yaml) => ReplResult::success_with_output(yaml),
-                    Err(e) => ReplResult::failure(e.to_string()),
-                }
-            }
+            "json" => match serde_json::to_string_pretty(&entries_to_show) {
+                Ok(json) => ReplResult::success_with_output(json),
+                Err(e) => ReplResult::failure(e.to_string()),
+            },
+            "yaml" => match serde_yaml::to_string(&entries_to_show) {
+                Ok(yaml) => ReplResult::success_with_output(yaml),
+                Err(e) => ReplResult::failure(e.to_string()),
+            },
             _ => {
                 let mut output_lines = Vec::new();
                 output_lines.push("Source Audit Report".to_string());
                 output_lines.push(format!("  ✓ {} current", report.current_count()));
                 output_lines.push(format!("  ⚠ {} modified", report.modified_count()));
-                output_lines.push(format!("  ○ {} never executed", report.never_executed_count()));
+                output_lines.push(format!(
+                    "  ○ {} never executed",
+                    report.never_executed_count()
+                ));
 
                 let data = serde_json::json!({
                     "current": report.current_count(),
@@ -914,9 +1091,20 @@ impl ReplSession {
         match writer.list_tables().await {
             Ok(tables) => {
                 if tables.is_empty() {
-                    ReplResult::success_with_output(format!("No scratch tables found in {}.bqdrift_scratch", project))
+                    ReplResult::success_with_output(format!(
+                        "No scratch tables found in {}.bqdrift_scratch",
+                        project
+                    ))
                 } else {
-                    let output = format!("Scratch tables in {}.bqdrift_scratch:\n{}", project, tables.iter().map(|t| format!("  {}", t)).collect::<Vec<_>>().join("\n"));
+                    let output = format!(
+                        "Scratch tables in {}.bqdrift_scratch:\n{}",
+                        project,
+                        tables
+                            .iter()
+                            .map(|t| format!("  {}", t))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                    );
                     let data = serde_json::json!({"tables": tables});
                     ReplResult::success_with_both(output, data)
                 }
@@ -961,17 +1149,25 @@ impl ReplSession {
 
         let production_client = match BqClient::new(&production_project).await {
             Ok(c) => c,
-            Err(e) => return ReplResult::failure(format!("Failed to connect to production: {}", e)),
+            Err(e) => {
+                return ReplResult::failure(format!("Failed to connect to production: {}", e))
+            }
         };
 
         let config = ScratchConfig::new(scratch_project.to_string());
         let scratch_writer = ScratchWriter::new(scratch_client, config);
 
-        match scratch_writer.promote_to_production(query, &partition_key, &production_client).await {
+        match scratch_writer
+            .promote_to_production(query, &partition_key, &production_client)
+            .await
+        {
             Ok(stats) => {
                 let output = format!(
                     "✓ Promoted {} to production\n  From: {}\n  To: {}\n  Partition: {}",
-                    stats.query_name, stats.scratch_table, stats.production_table, stats.partition_key
+                    stats.query_name,
+                    stats.scratch_table,
+                    stats.production_table,
+                    stats.partition_key
                 );
                 let data = serde_json::json!({
                     "query": stats.query_name,
@@ -985,10 +1181,12 @@ impl ReplSession {
         }
     }
 
-    fn parse_partition(partition: &Option<String>, partition_type: &PartitionType) -> std::result::Result<PartitionKey, String> {
+    fn parse_partition(
+        partition: &Option<String>,
+        partition_type: &PartitionType,
+    ) -> std::result::Result<PartitionKey, String> {
         match partition {
-            Some(p) => PartitionKey::parse(p, partition_type)
-                .map_err(|e| e.to_string()),
+            Some(p) => PartitionKey::parse(p, partition_type).map_err(|e| e.to_string()),
             None => Ok(Self::default_partition_key(partition_type)),
         }
     }
@@ -1001,7 +1199,10 @@ impl ReplSession {
                 PartitionKey::Hour(now.date().and_hms_opt(now.time().hour(), 0, 0).unwrap())
             }
             PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
-            PartitionType::Month => PartitionKey::Month { year: today.year(), month: today.month() },
+            PartitionType::Month => PartitionKey::Month {
+                year: today.year(),
+                month: today.month(),
+            },
             PartitionType::Year => PartitionKey::Year(today.year()),
             PartitionType::Range => PartitionKey::Range(0),
         }

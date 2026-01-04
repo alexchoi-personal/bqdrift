@@ -1,11 +1,11 @@
-use sha2::{Sha256, Digest};
-use flate2::Compression;
-use flate2::write::GzEncoder;
-use flate2::read::GzDecoder;
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use std::io::{Write, Read};
 use crate::dsl::VersionDef;
 use crate::schema::Schema;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
+use sha2::{Digest, Sha256};
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Checksums {
@@ -24,11 +24,7 @@ pub struct ExecutionArtifact {
 }
 
 impl Checksums {
-    pub fn compute(
-        sql_content: &str,
-        schema: &Schema,
-        yaml_content: &str,
-    ) -> Self {
+    pub fn compute(sql_content: &str, schema: &Schema, yaml_content: &str) -> Self {
         Self {
             sql: Self::sha256(&compress_to_base64(sql_content)),
             schema: Self::sha256(&compress_to_base64(&Self::schema_to_json(schema))),
@@ -58,13 +54,10 @@ impl Checksums {
 }
 
 impl ExecutionArtifact {
-    pub fn create(
-        sql_content: &str,
-        schema: &Schema,
-        yaml_content: &str,
-    ) -> Self {
+    pub fn create(sql_content: &str, schema: &Schema, yaml_content: &str) -> Self {
         let sql_compressed = compress_to_base64(sql_content);
-        let schema_compressed = compress_to_base64(&serde_json::to_string(&schema.fields).unwrap_or_default());
+        let schema_compressed =
+            compress_to_base64(&serde_json::to_string(&schema.fields).unwrap_or_default());
         let yaml_compressed = compress_to_base64(yaml_content);
 
         Self {
@@ -167,7 +160,13 @@ mod tests {
         assert_eq!(artifact.decompress_sql().unwrap(), sql);
         assert_eq!(artifact.decompress_yaml().unwrap(), yaml);
         // Checksums are computed on compressed base64 content
-        assert_eq!(artifact.sql_checksum, Checksums::sha256(&compress_to_base64(sql)));
-        assert_eq!(artifact.yaml_checksum, Checksums::sha256(&compress_to_base64(yaml)));
+        assert_eq!(
+            artifact.sql_checksum,
+            Checksums::sha256(&compress_to_base64(sql))
+        );
+        assert_eq!(
+            artifact.yaml_checksum,
+            Checksums::sha256(&compress_to_base64(yaml))
+        );
     }
 }

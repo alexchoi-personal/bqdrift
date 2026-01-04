@@ -75,20 +75,22 @@ pub struct QueryErrorLocation {
 impl BigQueryError {
     pub fn suggestion(&self) -> String {
         match self {
-            BigQueryError::AuthenticationFailed { .. } => {
-                "Try:\n  \
+            BigQueryError::AuthenticationFailed { .. } => "Try:\n  \
                  • Run: gcloud auth application-default login\n  \
-                 • Or set GOOGLE_APPLICATION_CREDENTIALS to your service account key file".to_string()
-            }
+                 • Or set GOOGLE_APPLICATION_CREDENTIALS to your service account key file"
+                .to_string(),
 
-            BigQueryError::InvalidQuery { .. } => {
-                "Check your SQL for:\n  \
+            BigQueryError::InvalidQuery { .. } => "Check your SQL for:\n  \
                  • Syntax errors (typos, missing keywords)\n  \
                  • Correct table/column names\n  \
-                 • Proper quoting for identifiers".to_string()
-            }
+                 • Proper quoting for identifiers"
+                .to_string(),
 
-            BigQueryError::TableNotFound { project, dataset, table } => {
+            BigQueryError::TableNotFound {
+                project,
+                dataset,
+                table,
+            } => {
                 format!(
                     "Verify the table exists:\n  \
                      • Run: bq show {project}:{dataset}.{table}\n  \
@@ -106,8 +108,13 @@ impl BigQueryError {
                 )
             }
 
-            BigQueryError::AccessDenied { resource, required_permission } => {
-                let perm = required_permission.as_deref().unwrap_or("bigquery.tables.getData");
+            BigQueryError::AccessDenied {
+                resource,
+                required_permission,
+            } => {
+                let perm = required_permission
+                    .as_deref()
+                    .unwrap_or("bigquery.tables.getData");
                 format!(
                     "Request access to {resource}:\n  \
                      • Required permission: {perm}\n  \
@@ -126,9 +133,7 @@ impl BigQueryError {
                 )
             }
 
-            BigQueryError::ResourcesExceeded { suggestion, .. } => {
-                suggestion.clone()
-            }
+            BigQueryError::ResourcesExceeded { suggestion, .. } => suggestion.clone(),
 
             BigQueryError::Timeout { operation, .. } => {
                 format!(
@@ -140,7 +145,10 @@ impl BigQueryError {
             }
 
             BigQueryError::SchemaMismatch { field, .. } => {
-                let field_info = field.as_ref().map(|f| format!(" for field '{f}'")).unwrap_or_default();
+                let field_info = field
+                    .as_ref()
+                    .map(|f| format!(" for field '{f}'"))
+                    .unwrap_or_default();
                 format!(
                     "Schema mismatch{field_info}:\n  \
                      • Check column types match expected schema\n  \
@@ -149,15 +157,15 @@ impl BigQueryError {
                 )
             }
 
-            BigQueryError::ConnectionFailed { .. } => {
-                "Connection failed:\n  \
+            BigQueryError::ConnectionFailed { .. } => "Connection failed:\n  \
                  • Check your internet connection\n  \
                  • Verify BigQuery API is enabled for your project\n  \
-                 • Try again in a few moments".to_string()
-            }
+                 • Try again in a few moments"
+                .to_string(),
 
             BigQueryError::InvalidCredentials { path, .. } => {
-                let path_info = path.as_ref()
+                let path_info = path
+                    .as_ref()
                     .map(|p| format!(" ({})", p))
                     .unwrap_or_default();
                 format!(
@@ -168,12 +176,11 @@ impl BigQueryError {
                 )
             }
 
-            BigQueryError::Unknown { .. } => {
-                "An unexpected error occurred:\n  \
+            BigQueryError::Unknown { .. } => "An unexpected error occurred:\n  \
                  • Check the error message for details\n  \
                  • Verify your BigQuery configuration\n  \
-                 • Check BigQuery status: https://status.cloud.google.com/".to_string()
-            }
+                 • Check BigQuery status: https://status.cloud.google.com/"
+                .to_string(),
         }
     }
 
@@ -202,7 +209,11 @@ impl fmt::Display for BigQueryError {
                 write!(f, "Authentication failed: {reason}")
             }
 
-            BigQueryError::InvalidQuery { message, sql_preview, location } => {
+            BigQueryError::InvalidQuery {
+                message,
+                sql_preview,
+                location,
+            } => {
                 write!(f, "Invalid SQL: {message}")?;
                 if let Some(loc) = location {
                     if let Some(line) = loc.line {
@@ -219,7 +230,11 @@ impl fmt::Display for BigQueryError {
                 Ok(())
             }
 
-            BigQueryError::TableNotFound { project, dataset, table } => {
+            BigQueryError::TableNotFound {
+                project,
+                dataset,
+                table,
+            } => {
                 write!(f, "Table not found: {project}.{dataset}.{table}")
             }
 
@@ -227,7 +242,10 @@ impl fmt::Display for BigQueryError {
                 write!(f, "Dataset not found: {project}.{dataset}")
             }
 
-            BigQueryError::AccessDenied { resource, required_permission } => {
+            BigQueryError::AccessDenied {
+                resource,
+                required_permission,
+            } => {
                 write!(f, "Access denied to {resource}")?;
                 if let Some(perm) = required_permission {
                     write!(f, " (requires {perm})")?;
@@ -235,7 +253,10 @@ impl fmt::Display for BigQueryError {
                 Ok(())
             }
 
-            BigQueryError::QuotaExceeded { quota_type, message } => {
+            BigQueryError::QuotaExceeded {
+                quota_type,
+                message,
+            } => {
                 write!(f, "Quota exceeded ({quota_type}): {message}")
             }
 
@@ -243,7 +264,10 @@ impl fmt::Display for BigQueryError {
                 write!(f, "Resources exceeded: {message}")
             }
 
-            BigQueryError::Timeout { operation, duration_ms } => {
+            BigQueryError::Timeout {
+                operation,
+                duration_ms,
+            } => {
                 write!(f, "Timeout during {operation}")?;
                 if let Some(ms) = duration_ms {
                     write!(f, " (after {}ms)", ms)?;
@@ -290,67 +314,112 @@ mod tests {
 
     #[test]
     fn test_error_codes() {
-        assert_eq!(BigQueryError::AuthenticationFailed {
-            reason: "test".into(),
-            help: "help".into(),
-        }.error_code(), "AUTH_FAILED");
+        assert_eq!(
+            BigQueryError::AuthenticationFailed {
+                reason: "test".into(),
+                help: "help".into(),
+            }
+            .error_code(),
+            "AUTH_FAILED"
+        );
 
-        assert_eq!(BigQueryError::InvalidQuery {
-            sql_preview: "".into(),
-            message: "".into(),
-            location: None,
-        }.error_code(), "INVALID_QUERY");
+        assert_eq!(
+            BigQueryError::InvalidQuery {
+                sql_preview: "".into(),
+                message: "".into(),
+                location: None,
+            }
+            .error_code(),
+            "INVALID_QUERY"
+        );
 
-        assert_eq!(BigQueryError::TableNotFound {
-            project: "p".into(),
-            dataset: "d".into(),
-            table: "t".into(),
-        }.error_code(), "TABLE_NOT_FOUND");
+        assert_eq!(
+            BigQueryError::TableNotFound {
+                project: "p".into(),
+                dataset: "d".into(),
+                table: "t".into(),
+            }
+            .error_code(),
+            "TABLE_NOT_FOUND"
+        );
 
-        assert_eq!(BigQueryError::DatasetNotFound {
-            project: "p".into(),
-            dataset: "d".into(),
-        }.error_code(), "DATASET_NOT_FOUND");
+        assert_eq!(
+            BigQueryError::DatasetNotFound {
+                project: "p".into(),
+                dataset: "d".into(),
+            }
+            .error_code(),
+            "DATASET_NOT_FOUND"
+        );
 
-        assert_eq!(BigQueryError::AccessDenied {
-            resource: "r".into(),
-            required_permission: None,
-        }.error_code(), "ACCESS_DENIED");
+        assert_eq!(
+            BigQueryError::AccessDenied {
+                resource: "r".into(),
+                required_permission: None,
+            }
+            .error_code(),
+            "ACCESS_DENIED"
+        );
 
-        assert_eq!(BigQueryError::QuotaExceeded {
-            quota_type: "q".into(),
-            message: "m".into(),
-        }.error_code(), "QUOTA_EXCEEDED");
+        assert_eq!(
+            BigQueryError::QuotaExceeded {
+                quota_type: "q".into(),
+                message: "m".into(),
+            }
+            .error_code(),
+            "QUOTA_EXCEEDED"
+        );
 
-        assert_eq!(BigQueryError::ResourcesExceeded {
-            message: "m".into(),
-            suggestion: "s".into(),
-        }.error_code(), "RESOURCES_EXCEEDED");
+        assert_eq!(
+            BigQueryError::ResourcesExceeded {
+                message: "m".into(),
+                suggestion: "s".into(),
+            }
+            .error_code(),
+            "RESOURCES_EXCEEDED"
+        );
 
-        assert_eq!(BigQueryError::Timeout {
-            operation: "o".into(),
-            duration_ms: None,
-        }.error_code(), "TIMEOUT");
+        assert_eq!(
+            BigQueryError::Timeout {
+                operation: "o".into(),
+                duration_ms: None,
+            }
+            .error_code(),
+            "TIMEOUT"
+        );
 
-        assert_eq!(BigQueryError::SchemaMismatch {
-            message: "m".into(),
-            field: None,
-        }.error_code(), "SCHEMA_MISMATCH");
+        assert_eq!(
+            BigQueryError::SchemaMismatch {
+                message: "m".into(),
+                field: None,
+            }
+            .error_code(),
+            "SCHEMA_MISMATCH"
+        );
 
-        assert_eq!(BigQueryError::ConnectionFailed {
-            reason: "r".into(),
-        }.error_code(), "CONNECTION_FAILED");
+        assert_eq!(
+            BigQueryError::ConnectionFailed { reason: "r".into() }.error_code(),
+            "CONNECTION_FAILED"
+        );
 
-        assert_eq!(BigQueryError::InvalidCredentials {
-            path: None,
-            reason: "r".into(),
-        }.error_code(), "INVALID_CREDENTIALS");
+        assert_eq!(
+            BigQueryError::InvalidCredentials {
+                path: None,
+                reason: "r".into(),
+            }
+            .error_code(),
+            "INVALID_CREDENTIALS"
+        );
 
-        assert_eq!(BigQueryError::Unknown {
-            code: None,
-            message: "m".into(),
-            raw_error: "r".into(),
-        }.error_code(), "UNKNOWN");
+        assert_eq!(
+            BigQueryError::Unknown {
+                code: None,
+                message: "m".into(),
+                raw_error: "r".into(),
+            }
+            .error_code(),
+            "UNKNOWN"
+        );
     }
 
     #[test]
@@ -397,7 +466,10 @@ mod tests {
             dataset: "my_dataset".into(),
             table: "my_table".into(),
         };
-        assert_eq!(err.to_string(), "Table not found: my-project.my_dataset.my_table");
+        assert_eq!(
+            err.to_string(),
+            "Table not found: my-project.my_dataset.my_table"
+        );
     }
 
     #[test]
@@ -435,7 +507,10 @@ mod tests {
             quota_type: "daily query limit".into(),
             message: "Exceeded 1TB".into(),
         };
-        assert_eq!(err.to_string(), "Quota exceeded (daily query limit): Exceeded 1TB");
+        assert_eq!(
+            err.to_string(),
+            "Quota exceeded (daily query limit): Exceeded 1TB"
+        );
     }
 
     #[test]
@@ -462,7 +537,10 @@ mod tests {
             message: "Expected INT64, got STRING".into(),
             field: Some("user_id".into()),
         };
-        assert_eq!(err.to_string(), "Schema mismatch on field 'user_id': Expected INT64, got STRING");
+        assert_eq!(
+            err.to_string(),
+            "Schema mismatch on field 'user_id': Expected INT64, got STRING"
+        );
     }
 
     #[test]
@@ -500,7 +578,10 @@ mod tests {
             message: "Something went wrong".into(),
             raw_error: "raw".into(),
         };
-        assert_eq!(err.to_string(), "BigQuery error [INTERNAL]: Something went wrong");
+        assert_eq!(
+            err.to_string(),
+            "BigQuery error [INTERNAL]: Something went wrong"
+        );
     }
 
     #[test]

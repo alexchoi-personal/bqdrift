@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use super::checksum::decompress_from_base64;
+use super::state::PartitionState;
+use crate::dsl::QueryDef;
 use chrono::{DateTime, Utc};
 use serde::Serialize;
+use std::collections::HashMap;
 use tabled::Tabled;
-use crate::dsl::QueryDef;
-use super::state::PartitionState;
-use super::checksum::decompress_from_base64;
 
 #[derive(Debug, Clone, Tabled)]
 pub struct AuditTableRow {
@@ -38,11 +38,13 @@ impl From<&SourceAuditEntry> for AuditTableRow {
         };
 
         let executed = match (entry.first_executed, entry.last_executed) {
-            (Some(first), Some(last)) if first == last => {
-                first.format("%Y-%m-%d").to_string()
-            }
+            (Some(first), Some(last)) if first == last => first.format("%Y-%m-%d").to_string(),
             (Some(first), Some(last)) => {
-                format!("{} to {}", first.format("%Y-%m-%d"), last.format("%Y-%m-%d"))
+                format!(
+                    "{} to {}",
+                    first.format("%Y-%m-%d"),
+                    last.format("%Y-%m-%d")
+                )
             }
             _ => "-".to_string(),
         };
@@ -65,10 +67,7 @@ impl From<&SourceAuditEntry> for AuditTableRow {
 }
 
 fn truncate_sql_preview(sql: &str, max_len: usize) -> String {
-    let normalized: String = sql
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let normalized: String = sql.split_whitespace().collect::<Vec<_>>().join(" ");
 
     if normalized.len() <= max_len {
         normalized
@@ -166,31 +165,48 @@ impl SourceAuditReport {
     }
 
     pub fn has_modifications(&self) -> bool {
-        self.entries.iter().any(|e| e.status == SourceStatus::Modified)
+        self.entries
+            .iter()
+            .any(|e| e.status == SourceStatus::Modified)
     }
 
     pub fn modified_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.status == SourceStatus::Modified).count()
+        self.entries
+            .iter()
+            .filter(|e| e.status == SourceStatus::Modified)
+            .count()
     }
 
     pub fn current_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.status == SourceStatus::Current).count()
+        self.entries
+            .iter()
+            .filter(|e| e.status == SourceStatus::Current)
+            .count()
     }
 
     pub fn never_executed_count(&self) -> usize {
-        self.entries.iter().filter(|e| e.status == SourceStatus::NeverExecuted).count()
+        self.entries
+            .iter()
+            .filter(|e| e.status == SourceStatus::NeverExecuted)
+            .count()
     }
 
     pub fn by_query(&self) -> HashMap<String, Vec<&SourceAuditEntry>> {
         let mut grouped: HashMap<String, Vec<&SourceAuditEntry>> = HashMap::new();
         for entry in &self.entries {
-            grouped.entry(entry.query_name.clone()).or_default().push(entry);
+            grouped
+                .entry(entry.query_name.clone())
+                .or_default()
+                .push(entry);
         }
         grouped
     }
 
     pub fn modified_entries(&self) -> Vec<&SourceAuditEntry> {
-        self.entries.iter().filter(|e| e.status == SourceStatus::Modified).collect()
+        self.entries
+            .iter()
+            .filter(|e| e.status == SourceStatus::Modified)
+            .collect()
     }
 }
 
@@ -206,16 +222,18 @@ impl<'a> SourceAuditor<'a> {
     pub fn audit(&self, stored_states: &[PartitionState]) -> SourceAuditReport {
         let mut report = SourceAuditReport::new();
 
-        let states_by_query: HashMap<&str, Vec<&PartitionState>> = stored_states
-            .iter()
-            .fold(HashMap::new(), |mut acc, state| {
-                acc.entry(state.query_name.as_str()).or_default().push(state);
+        let states_by_query: HashMap<&str, Vec<&PartitionState>> =
+            stored_states.iter().fold(HashMap::new(), |mut acc, state| {
+                acc.entry(state.query_name.as_str())
+                    .or_default()
+                    .push(state);
                 acc
             });
 
         for query in self.queries {
             let query_states = states_by_query.get(query.name.as_str());
-            let entries = self.audit_query(query, query_states.map(|v| v.as_slice()).unwrap_or(&[]));
+            let entries =
+                self.audit_query(query, query_states.map(|v| v.as_slice()).unwrap_or(&[]));
             for entry in entries {
                 report.add(entry);
             }
@@ -227,7 +245,8 @@ impl<'a> SourceAuditor<'a> {
     fn audit_query(&self, query: &QueryDef, states: &[&PartitionState]) -> Vec<SourceAuditEntry> {
         let mut entries = Vec::new();
 
-        let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> = HashMap::new();
+        let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
+            HashMap::new();
         for state in states {
             states_by_version
                 .entry((state.version, state.sql_revision))
@@ -321,11 +340,11 @@ impl<'a> SourceAuditor<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsl::{VersionDef, Destination, ResolvedRevision};
-    use crate::schema::{Schema, PartitionConfig};
-    use crate::invariant::InvariantsDef;
     use crate::drift::checksum::compress_to_base64;
     use crate::drift::state::ExecutionStatus;
+    use crate::dsl::{Destination, ResolvedRevision, VersionDef};
+    use crate::invariant::InvariantsDef;
+    use crate::schema::{PartitionConfig, Schema};
     use chrono::{NaiveDate, Utc};
     use std::collections::HashSet;
 
@@ -430,9 +449,13 @@ mod tests {
         let query = create_test_query("test_query", vec![create_version(1, sql)]);
         let queries = vec![query];
 
-        let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, sql),
-        ];
+        let stored = vec![create_stored_state(
+            "test_query",
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            1,
+            None,
+            sql,
+        )];
 
         let auditor = SourceAuditor::new(&queries);
         let report = auditor.audit(&stored);
@@ -451,9 +474,13 @@ mod tests {
         let query = create_test_query("test_query", vec![create_version(1, modified_sql)]);
         let queries = vec![query];
 
-        let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, original_sql),
-        ];
+        let stored = vec![create_stored_state(
+            "test_query",
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            1,
+            None,
+            original_sql,
+        )];
 
         let auditor = SourceAuditor::new(&queries);
         let report = auditor.audit(&stored);
@@ -471,15 +498,19 @@ mod tests {
         let v1_sql = "SELECT 1";
         let v2_sql = "SELECT 2";
 
-        let query = create_test_query("test_query", vec![
-            create_version(1, v1_sql),
-            create_version(2, v2_sql),
-        ]);
+        let query = create_test_query(
+            "test_query",
+            vec![create_version(1, v1_sql), create_version(2, v2_sql)],
+        );
         let queries = vec![query];
 
-        let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, v1_sql),
-        ];
+        let stored = vec![create_stored_state(
+            "test_query",
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            1,
+            None,
+            v1_sql,
+        )];
 
         let auditor = SourceAuditor::new(&queries);
         let report = auditor.audit(&stored);
@@ -498,14 +529,27 @@ mod tests {
         let base_sql = "SELECT * FROM users";
         let rev_sql = "SELECT COALESCE(user_id, 0) FROM users";
 
-        let query = create_test_query("test_query", vec![
-            create_version_with_revision(1, base_sql, rev_sql),
-        ]);
+        let query = create_test_query(
+            "test_query",
+            vec![create_version_with_revision(1, base_sql, rev_sql)],
+        );
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, base_sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 3, 15).unwrap(), 1, Some(1), rev_sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                base_sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 3, 15).unwrap(),
+                1,
+                Some(1),
+                rev_sql,
+            ),
         ];
 
         let auditor = SourceAuditor::new(&queries);
@@ -513,8 +557,16 @@ mod tests {
 
         assert_eq!(report.entries.len(), 2);
 
-        let base_entry = report.entries.iter().find(|e| e.revision.is_none()).unwrap();
-        let rev_entry = report.entries.iter().find(|e| e.revision == Some(1)).unwrap();
+        let base_entry = report
+            .entries
+            .iter()
+            .find(|e| e.revision.is_none())
+            .unwrap();
+        let rev_entry = report
+            .entries
+            .iter()
+            .find(|e| e.revision == Some(1))
+            .unwrap();
 
         assert_eq!(base_entry.status, SourceStatus::Current);
         assert_eq!(rev_entry.status, SourceStatus::Current);
@@ -527,9 +579,27 @@ mod tests {
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(), 1, None, sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(), 1, None, sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                1,
+                None,
+                sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
+                1,
+                None,
+                sql,
+            ),
         ];
 
         let auditor = SourceAuditor::new(&queries);
@@ -550,8 +620,20 @@ mod tests {
         let queries = vec![query1, query2];
 
         let stored = vec![
-            create_stored_state("query_1", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, q1_sql),
-            create_stored_state("query_2", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, q2_sql),
+            create_stored_state(
+                "query_1",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                q1_sql,
+            ),
+            create_stored_state(
+                "query_2",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                q2_sql,
+            ),
         ];
 
         let auditor = SourceAuditor::new(&queries);

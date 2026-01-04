@@ -1,10 +1,10 @@
+use super::checksum::Checksums;
+use super::state::{DriftReport, DriftState, PartitionDrift, PartitionState};
+use crate::dsl::QueryDef;
+use crate::error::Result;
+use crate::schema::PartitionKey;
 use chrono::NaiveDate;
 use std::collections::HashMap;
-use crate::error::Result;
-use crate::dsl::QueryDef;
-use crate::schema::PartitionKey;
-use super::checksum::Checksums;
-use super::state::{PartitionState, DriftState, DriftReport, PartitionDrift};
 
 pub struct DriftDetector {
     queries: HashMap<String, QueryDef>,
@@ -14,7 +14,10 @@ pub struct DriftDetector {
 impl DriftDetector {
     pub fn new(queries: Vec<QueryDef>, yaml_contents: HashMap<String, String>) -> Self {
         let queries = queries.into_iter().map(|q| (q.name.clone(), q)).collect();
-        Self { queries, yaml_contents }
+        Self {
+            queries,
+            yaml_contents,
+        }
     }
 
     pub fn detect(
@@ -31,7 +34,11 @@ impl DriftDetector {
             .collect();
 
         for (query_name, query) in &self.queries {
-            let yaml_content = self.yaml_contents.get(query_name).map(|s| s.as_str()).unwrap_or("");
+            let yaml_content = self
+                .yaml_contents
+                .get(query_name)
+                .map(|s| s.as_str())
+                .unwrap_or("");
 
             let mut current = from;
             while current <= to {
@@ -57,7 +64,10 @@ impl DriftDetector {
         yaml_content: &str,
     ) -> PartitionDrift {
         let version = query.get_version_for_date(partition_date);
-        let current_sql = version.map(|v| v.get_sql_for_date(chrono::Utc::now().date_naive()).to_string());
+        let current_sql = version.map(|v| {
+            v.get_sql_for_date(chrono::Utc::now().date_naive())
+                .to_string()
+        });
 
         let (state, executed_version, caused_by, executed_sql_b64) = match (version, stored) {
             (None, _) => (DriftState::NeverRun, None, None, None),
@@ -66,23 +76,45 @@ impl DriftDetector {
 
             (Some(v), Some(stored)) => {
                 if stored.status == super::state::ExecutionStatus::Failed {
-                    (DriftState::Failed, Some(stored.version), None, stored.executed_sql_b64.clone())
+                    (
+                        DriftState::Failed,
+                        Some(stored.version),
+                        None,
+                        stored.executed_sql_b64.clone(),
+                    )
                 } else {
-                    let current_checksums = Checksums::from_version(
-                        v,
-                        yaml_content,
-                        chrono::Utc::now().date_naive(),
-                    );
+                    let current_checksums =
+                        Checksums::from_version(v, yaml_content, chrono::Utc::now().date_naive());
 
                     if current_checksums.schema != stored.schema_checksum {
-                        (DriftState::SchemaChanged, Some(stored.version), None, stored.executed_sql_b64.clone())
+                        (
+                            DriftState::SchemaChanged,
+                            Some(stored.version),
+                            None,
+                            stored.executed_sql_b64.clone(),
+                        )
                     } else if current_checksums.sql != stored.sql_checksum {
-                        (DriftState::SqlChanged, Some(stored.version), None, stored.executed_sql_b64.clone())
+                        (
+                            DriftState::SqlChanged,
+                            Some(stored.version),
+                            None,
+                            stored.executed_sql_b64.clone(),
+                        )
                     } else if v.version != stored.version {
-                        (DriftState::VersionUpgraded, Some(stored.version), None, stored.executed_sql_b64.clone())
+                        (
+                            DriftState::VersionUpgraded,
+                            Some(stored.version),
+                            None,
+                            stored.executed_sql_b64.clone(),
+                        )
                     } else {
                         // TODO: Check upstream_changed
-                        (DriftState::Current, Some(stored.version), None, stored.executed_sql_b64.clone())
+                        (
+                            DriftState::Current,
+                            Some(stored.version),
+                            None,
+                            stored.executed_sql_b64.clone(),
+                        )
                     }
                 }
             }
@@ -113,7 +145,9 @@ impl DriftDetector {
             // Find the latest execution of the upstream query for this partition date
             let upstream_latest = all_states
                 .iter()
-                .filter(|s| &s.query_name == upstream_name && s.partition_date == stored.partition_date)
+                .filter(|s| {
+                    &s.query_name == upstream_name && s.partition_date == stored.partition_date
+                })
                 .max_by_key(|s| s.executed_at);
 
             if let Some(upstream) = upstream_latest {
@@ -130,10 +164,10 @@ impl DriftDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsl::{VersionDef, Destination};
-    use crate::schema::{Schema, PartitionConfig};
-    use crate::drift::checksum::{Checksums, compress_to_base64};
+    use crate::drift::checksum::{compress_to_base64, Checksums};
+    use crate::dsl::{Destination, VersionDef};
     use crate::invariant::InvariantsDef;
+    use crate::schema::{PartitionConfig, Schema};
     use chrono::{NaiveDate, Utc};
     use std::collections::HashSet;
 
@@ -194,7 +228,8 @@ mod tests {
     #[test]
     fn test_detect_never_run_has_current_sql() {
         let query = create_test_query("test_query", "SELECT * FROM source");
-        let yaml_contents = HashMap::from([("test_query".to_string(), "name: test_query".to_string())]);
+        let yaml_contents =
+            HashMap::from([("test_query".to_string(), "name: test_query".to_string())]);
         let detector = DriftDetector::new(vec![query], yaml_contents);
 
         let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
@@ -204,7 +239,11 @@ mod tests {
         let drift = &report.partitions[0];
         assert_eq!(drift.state, DriftState::NeverRun);
         assert!(drift.current_sql.is_some());
-        assert!(drift.current_sql.as_ref().unwrap().contains("SELECT * FROM source"));
+        assert!(drift
+            .current_sql
+            .as_ref()
+            .unwrap()
+            .contains("SELECT * FROM source"));
         assert!(drift.executed_sql_b64.is_none());
     }
 
@@ -272,7 +311,8 @@ mod tests {
         let drift = &report.partitions[0];
         assert_eq!(drift.state, DriftState::SqlChanged);
 
-        let executed = crate::drift::decompress_from_base64(drift.executed_sql_b64.as_ref().unwrap());
+        let executed =
+            crate::drift::decompress_from_base64(drift.executed_sql_b64.as_ref().unwrap());
         assert!(executed.is_some());
         assert_eq!(executed.unwrap(), old_sql);
     }

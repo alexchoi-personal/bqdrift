@@ -1,4 +1,4 @@
-use base64::{Engine, engine::general_purpose::STANDARD};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use colored::Colorize;
 use similar::{ChangeTag, TextDiff};
 
@@ -7,7 +7,8 @@ pub fn encode_sql(sql: &str) -> String {
 }
 
 pub fn decode_sql(encoded: &str) -> Option<String> {
-    STANDARD.decode(encoded)
+    STANDARD
+        .decode(encoded)
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok())
 }
@@ -16,7 +17,11 @@ pub fn format_sql_diff(old_sql: &str, new_sql: &str) -> String {
     let diff = TextDiff::from_lines(old_sql, new_sql);
     let mut output = String::new();
 
-    output.push_str(&"───────────────────────────────────────\n".dimmed().to_string());
+    output.push_str(
+        &"───────────────────────────────────────\n"
+            .dimmed()
+            .to_string(),
+    );
 
     for change in diff.iter_all_changes() {
         let line = change.to_string();
@@ -29,7 +34,11 @@ pub fn format_sql_diff(old_sql: &str, new_sql: &str) -> String {
         output.push('\n');
     }
 
-    output.push_str(&"───────────────────────────────────────".dimmed().to_string());
+    output.push_str(
+        &"───────────────────────────────────────"
+            .dimmed()
+            .to_string(),
+    );
 
     output
 }

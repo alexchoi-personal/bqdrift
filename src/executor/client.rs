@@ -1,5 +1,10 @@
+use crate::dsl::QueryDef;
+use crate::error::{parse_bq_error, BqDriftError, ErrorContext, Result};
+use crate::schema::{
+    BqType, ClusterConfig, Field, FieldMode, PartitionConfig, PartitionType, Schema,
+};
 use chrono::{DateTime, Utc};
-use gcp_bigquery_client::Client;
+use gcp_bigquery_client::model::clustering::Clustering;
 use gcp_bigquery_client::model::dataset::Dataset;
 use gcp_bigquery_client::model::field_type::FieldType;
 use gcp_bigquery_client::model::query_request::QueryRequest;
@@ -7,10 +12,7 @@ use gcp_bigquery_client::model::table::Table;
 use gcp_bigquery_client::model::table_field_schema::TableFieldSchema;
 use gcp_bigquery_client::model::table_schema::TableSchema;
 use gcp_bigquery_client::model::time_partitioning::TimePartitioning;
-use gcp_bigquery_client::model::clustering::Clustering;
-use crate::error::{BqDriftError, Result, parse_bq_error, ErrorContext};
-use crate::schema::{BqType, Field, FieldMode, Schema, PartitionConfig, PartitionType, ClusterConfig};
-use crate::dsl::QueryDef;
+use gcp_bigquery_client::Client;
 
 #[derive(Clone)]
 pub struct BqClient {
@@ -34,7 +36,8 @@ impl BqClient {
     }
 
     pub async fn create_table(&self, query_def: &QueryDef) -> Result<()> {
-        let latest = query_def.latest_version()
+        let latest = query_def
+            .latest_version()
             .ok_or_else(|| BqDriftError::Schema("No versions defined".into()))?;
 
         let schema = self.build_table_schema(&latest.schema);
@@ -53,16 +56,16 @@ impl BqClient {
             table.clustering = Some(c);
         }
 
-        self.client
-            .table()
-            .create(table)
-            .await
-            .map_err(|e| {
-                let ctx = ErrorContext::new()
-                    .with_operation("create_table")
-                    .with_table(&self.project_id, &query_def.destination.dataset, &query_def.destination.table);
-                BqDriftError::BigQuery(parse_bq_error(e, ctx))
-            })?;
+        self.client.table().create(table).await.map_err(|e| {
+            let ctx = ErrorContext::new()
+                .with_operation("create_table")
+                .with_table(
+                    &self.project_id,
+                    &query_def.destination.dataset,
+                    &query_def.destination.table,
+                );
+            BqDriftError::BigQuery(parse_bq_error(e, ctx))
+        })?;
 
         Ok(())
     }
@@ -85,7 +88,12 @@ impl BqClient {
     }
 
     pub async fn table_exists(&self, dataset: &str, table: &str) -> Result<bool> {
-        match self.client.table().get(&self.project_id, dataset, table, None).await {
+        match self
+            .client
+            .table()
+            .get(&self.project_id, dataset, table, None)
+            .await
+        {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
@@ -98,7 +106,9 @@ impl BqClient {
             .map(|f| self.build_field_schema(f))
             .collect();
 
-        TableSchema { fields: Some(fields) }
+        TableSchema {
+            fields: Some(fields),
+        }
     }
 
     fn build_field_schema(&self, field: &Field) -> TableFieldSchema {
@@ -150,7 +160,8 @@ impl BqClient {
             PartitionType::Month => "MONTH",
             PartitionType::Year => "YEAR",
             _ => "DAY",
-        }.to_string();
+        }
+        .to_string();
 
         if let Some(field) = &config.field {
             tp.field = Some(field.clone());
@@ -174,7 +185,8 @@ impl BqClient {
     pub async fn query_row_count(&self, sql: &str) -> Result<i64> {
         let request = QueryRequest::new(sql);
 
-        let result = self.client
+        let result = self
+            .client
             .job()
             .query(&self.project_id, request)
             .await
@@ -193,7 +205,10 @@ impl BqClient {
                         if let Some(value) = &first_cell.value {
                             if let Some(s) = value.as_str() {
                                 return s.parse::<i64>().map_err(|_| {
-                                    BqDriftError::Schema(format!("Could not parse count value: {}", s))
+                                    BqDriftError::Schema(format!(
+                                        "Could not parse count value: {}",
+                                        s
+                                    ))
                                 });
                             } else if let Some(n) = value.as_i64() {
                                 return Ok(n);
@@ -211,7 +226,8 @@ impl BqClient {
     pub async fn query_single_float(&self, sql: &str) -> Result<Option<f64>> {
         let request = QueryRequest::new(sql);
 
-        let result = self.client
+        let result = self
+            .client
             .job()
             .query(&self.project_id, request)
             .await
@@ -229,7 +245,10 @@ impl BqClient {
                         if let Some(value) = &first_cell.value {
                             if let Some(s) = value.as_str() {
                                 return Ok(Some(s.parse::<f64>().map_err(|_| {
-                                    BqDriftError::Schema(format!("Could not parse float value: {}", s))
+                                    BqDriftError::Schema(format!(
+                                        "Could not parse float value: {}",
+                                        s
+                                    ))
                                 })?));
                             } else if let Some(n) = value.as_f64() {
                                 return Ok(Some(n));
@@ -247,7 +266,8 @@ impl BqClient {
     pub async fn query_single_int(&self, sql: &str) -> Result<Option<i64>> {
         let request = QueryRequest::new(sql);
 
-        let result = self.client
+        let result = self
+            .client
             .job()
             .query(&self.project_id, request)
             .await
@@ -265,7 +285,10 @@ impl BqClient {
                         if let Some(value) = &first_cell.value {
                             if let Some(s) = value.as_str() {
                                 return Ok(Some(s.parse::<i64>().map_err(|_| {
-                                    BqDriftError::Schema(format!("Could not parse int value: {}", s))
+                                    BqDriftError::Schema(format!(
+                                        "Could not parse int value: {}",
+                                        s
+                                    ))
                                 })?));
                             } else if let Some(n) = value.as_i64() {
                                 return Ok(Some(n));
@@ -284,7 +307,8 @@ impl BqClient {
     pub async fn query_two_floats(&self, sql: &str) -> Result<(Option<f64>, Option<f64>)> {
         let request = QueryRequest::new(sql);
 
-        let result = self.client
+        let result = self
+            .client
             .job()
             .query(&self.project_id, request)
             .await
@@ -331,22 +355,22 @@ impl BqClient {
             Ok(_) => Ok(()),
             Err(_) => {
                 let ds = Dataset::new(&self.project_id, dataset);
-                self.client
-                    .dataset()
-                    .create(ds)
-                    .await
-                    .map_err(|e| {
-                        let ctx = ErrorContext::new()
-                            .with_operation("create_dataset");
-                        BqDriftError::BigQuery(parse_bq_error(e, ctx))
-                    })?;
+                self.client.dataset().create(ds).await.map_err(|e| {
+                    let ctx = ErrorContext::new().with_operation("create_dataset");
+                    BqDriftError::BigQuery(parse_bq_error(e, ctx))
+                })?;
                 Ok(())
             }
         }
     }
 
     pub async fn drop_table(&self, dataset: &str, table: &str) -> Result<()> {
-        match self.client.table().delete(&self.project_id, dataset, table).await {
+        match self
+            .client
+            .table()
+            .delete(&self.project_id, dataset, table)
+            .await
+        {
             Ok(_) => Ok(()),
             Err(_) => Ok(()),
         }
@@ -365,12 +389,7 @@ impl BqClient {
         let time_partitioning = self.build_time_partitioning(partition_config);
         let clustering = cluster_config.map(|c| self.build_clustering(c));
 
-        let mut tbl = Table::new(
-            &self.project_id,
-            dataset,
-            table,
-            table_schema,
-        );
+        let mut tbl = Table::new(&self.project_id, dataset, table, table_schema);
 
         tbl.time_partitioning = Some(time_partitioning);
         if let Some(c) = clustering {
@@ -378,28 +397,24 @@ impl BqClient {
         }
         tbl.expiration_time = Some(expiration.timestamp_millis().to_string());
 
-        self.client
-            .table()
-            .create(tbl)
-            .await
-            .map_err(|e| {
-                let ctx = ErrorContext::new()
-                    .with_operation("create_table_with_expiration")
-                    .with_table(&self.project_id, dataset, table);
-                BqDriftError::BigQuery(parse_bq_error(e, ctx))
-            })?;
+        self.client.table().create(tbl).await.map_err(|e| {
+            let ctx = ErrorContext::new()
+                .with_operation("create_table_with_expiration")
+                .with_table(&self.project_id, dataset, table);
+            BqDriftError::BigQuery(parse_bq_error(e, ctx))
+        })?;
 
         Ok(())
     }
 
     pub async fn list_tables(&self, dataset: &str) -> Result<Vec<String>> {
-        let tables = self.client
+        let tables = self
+            .client
             .table()
             .list(&self.project_id, dataset, Default::default())
             .await
             .map_err(|e| {
-                let ctx = ErrorContext::new()
-                    .with_operation("list_tables");
+                let ctx = ErrorContext::new().with_operation("list_tables");
                 BqDriftError::BigQuery(parse_bq_error(e, ctx))
             })?;
 

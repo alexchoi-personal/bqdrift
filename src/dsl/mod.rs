@@ -1,13 +1,15 @@
-mod parser;
-mod resolver;
-mod loader;
-mod validator;
 mod dependencies;
+mod loader;
+mod parser;
 mod preprocessor;
+mod resolver;
+mod validator;
 
-pub use parser::{QueryDef, VersionDef, Revision, ResolvedRevision, Destination, RawQueryDef, SchemaRef};
-pub use resolver::VariableResolver;
-pub use loader::QueryLoader;
-pub use validator::{QueryValidator, ValidationResult, ValidationError, ValidationWarning};
 pub use dependencies::SqlDependencies;
+pub use loader::QueryLoader;
+pub use parser::{
+    Destination, QueryDef, RawQueryDef, ResolvedRevision, Revision, SchemaRef, VersionDef,
+};
 pub use preprocessor::YamlPreprocessor;
+pub use resolver::VariableResolver;
+pub use validator::{QueryValidator, ValidationError, ValidationResult, ValidationWarning};

@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::field::Field;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Schema {

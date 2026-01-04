@@ -1,10 +1,11 @@
+use super::manager::{ServerConfig, SessionCreateParams, SessionManager};
+use super::protocol::{JsonRpcRequest, JsonRpcResponse};
+use crate::error::Result;
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{interval, Duration};
-use crate::error::Result;
-use super::manager::{ServerConfig, SessionManager, SessionCreateParams};
-use super::protocol::{JsonRpcRequest, JsonRpcResponse};
+use tracing::warn;
 
 pub struct AsyncJsonRpcServer {
     manager: Arc<Mutex<SessionManager>>,
@@ -27,9 +28,17 @@ impl AsyncJsonRpcServer {
             let mut stdout = BufWriter::new(stdout);
             while let Some(response) = response_rx.recv().await {
                 if let Ok(json) = serde_json::to_string(&response) {
-                    let _ = stdout.write_all(json.as_bytes()).await;
-                    let _ = stdout.write_all(b"\n").await;
-                    let _ = stdout.flush().await;
+                    if let Err(e) = stdout.write_all(json.as_bytes()).await {
+                        warn!(error = %e, "failed to write JSON-RPC response");
+                        continue;
+                    }
+                    if let Err(e) = stdout.write_all(b"\n").await {
+                        warn!(error = %e, "failed to write newline");
+                        continue;
+                    }
+                    if let Err(e) = stdout.flush().await {
+                        warn!(error = %e, "failed to flush stdout");
+                    }
                 }
             }
         });
@@ -122,7 +131,8 @@ impl AsyncJsonRpcServer {
             }
 
             "session_destroy" => {
-                let session_id = request.params
+                let session_id = request
+                    .params
                     .as_ref()
                     .and_then(|p| p.get("session"))
                     .and_then(|v| v.as_str())
@@ -138,7 +148,8 @@ impl AsyncJsonRpcServer {
             }
 
             "session_keepalive" => {
-                let session_id = request.params
+                let session_id = request
+                    .params
                     .as_ref()
                     .and_then(|p| p.get("session"))
                     .and_then(|v| v.as_str())
@@ -166,7 +177,7 @@ impl AsyncJsonRpcServer {
 
 #[cfg(test)]
 mod tests {
-    use super::super::protocol::{PARSE_ERROR, INVALID_REQUEST};
+    use super::super::protocol::{INVALID_REQUEST, PARSE_ERROR};
     use super::*;
 
     #[test]

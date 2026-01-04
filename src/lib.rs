@@ -1,24 +1,40 @@
-pub mod error;
-pub mod schema;
-pub mod dsl;
-pub mod executor;
-pub mod migration;
-pub mod drift;
-pub mod invariant;
+pub mod bq_runner;
 pub mod diff;
+pub mod drift;
+pub mod dsl;
+pub mod error;
+pub mod executor;
+pub mod invariant;
+pub mod migration;
 pub mod repl;
+pub mod schema;
 
-pub use error::{BqDriftError, Result};
-pub use schema::{BqType, Field, FieldMode, Schema, PartitionConfig, PartitionType, PartitionKey, ClusterConfig};
-pub use dsl::{QueryDef, VersionDef, Revision, ResolvedRevision, QueryLoader, QueryValidator, ValidationResult, SqlDependencies};
-pub use executor::{PartitionWriter, Runner, BqClient};
-pub use executor::{Executor, ExecutorMode, ExecutorRunner, QueryResult, ColumnDef, ColumnInfo, create_mock_executor, create_bigquery_executor};
-pub use migration::MigrationTracker;
-pub use drift::{Checksums, ExecutionArtifact, DriftDetector, DriftReport, DriftState, PartitionState, PartitionDrift, ExecutionStatus, compress_to_base64, decompress_from_base64, ImmutabilityChecker, ImmutabilityReport, ImmutabilityViolation, SourceAuditor, SourceAuditReport, SourceAuditEntry, SourceStatus, AuditTableRow};
-pub use diff::{encode_sql, decode_sql, format_sql_diff, has_changes};
-pub use invariant::{
-    InvariantsRef, InvariantsDef, InvariantDef, InvariantCheck, Severity,
-    InvariantChecker, CheckResult, CheckStatus, InvariantReport,
-    resolve_invariants_def,
+pub use diff::{decode_sql, encode_sql, format_sql_diff, has_changes};
+pub use drift::{
+    compress_to_base64, decompress_from_base64, AuditTableRow, Checksums, DriftDetector,
+    DriftReport, DriftState, ExecutionArtifact, ExecutionStatus, ImmutabilityChecker,
+    ImmutabilityReport, ImmutabilityViolation, PartitionDrift, PartitionState, SourceAuditEntry,
+    SourceAuditReport, SourceAuditor, SourceStatus,
 };
-pub use repl::{ReplSession, ReplCommand, ReplResult, InteractiveRepl, AsyncJsonRpcServer, ServerConfig, SessionManager, SessionInfo, ServerConfigInfo};
+pub use dsl::{
+    QueryDef, QueryLoader, QueryValidator, ResolvedRevision, Revision, SqlDependencies,
+    ValidationResult, VersionDef,
+};
+pub use error::{BqDriftError, Result};
+pub use executor::{
+    create_bigquery_executor, create_mock_executor, ColumnDef, ColumnInfo, Executor, ExecutorMode,
+    ExecutorRunner, QueryResult,
+};
+pub use executor::{BqClient, PartitionWriter, Runner};
+pub use invariant::{
+    resolve_invariants_def, CheckResult, CheckStatus, InvariantCheck, InvariantChecker,
+    InvariantDef, InvariantReport, InvariantsDef, InvariantsRef, Severity,
+};
+pub use migration::MigrationTracker;
+pub use repl::{
+    AsyncJsonRpcServer, InteractiveRepl, ReplCommand, ReplResult, ReplSession, ServerConfig,
+    ServerConfigInfo, SessionInfo, SessionManager,
+};
+pub use schema::{
+    BqType, ClusterConfig, Field, FieldMode, PartitionConfig, PartitionKey, PartitionType, Schema,
+};

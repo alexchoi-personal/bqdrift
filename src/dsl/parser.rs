@@ -1,8 +1,8 @@
+use crate::invariant::{InvariantsDef, InvariantsRef};
+use crate::schema::{ClusterConfig, Field, PartitionConfig, Schema};
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use crate::schema::{Field, PartitionConfig, ClusterConfig, Schema};
-use crate::invariant::{InvariantsRef, InvariantsDef};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RawQueryDef {
@@ -110,7 +110,8 @@ pub struct ResolvedRevision {
 
 impl VersionDef {
     pub fn get_sql_for_date(&self, execution_date: NaiveDate) -> &str {
-        let applicable_revision = self.revisions
+        let applicable_revision = self
+            .revisions
             .iter()
             .filter(|r| r.effective_from <= execution_date)
             .max_by_key(|r| r.effective_from);

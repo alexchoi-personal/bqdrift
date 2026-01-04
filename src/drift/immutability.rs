@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use crate::dsl::QueryDef;
-use super::state::PartitionState;
 use super::checksum::decompress_from_base64;
+use super::state::PartitionState;
+use crate::dsl::QueryDef;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct ImmutabilityViolation {
@@ -51,7 +51,10 @@ impl ImmutabilityReport {
     }
 
     pub fn total_affected_partitions(&self) -> usize {
-        self.violations.iter().map(|v| v.affected_partitions.len()).sum()
+        self.violations
+            .iter()
+            .map(|v| v.affected_partitions.len())
+            .sum()
     }
 }
 
@@ -67,10 +70,11 @@ impl<'a> ImmutabilityChecker<'a> {
     pub fn check(&self, stored_states: &[PartitionState]) -> ImmutabilityReport {
         let mut report = ImmutabilityReport::new();
 
-        let states_by_query: HashMap<&str, Vec<&PartitionState>> = stored_states
-            .iter()
-            .fold(HashMap::new(), |mut acc, state| {
-                acc.entry(state.query_name.as_str()).or_default().push(state);
+        let states_by_query: HashMap<&str, Vec<&PartitionState>> =
+            stored_states.iter().fold(HashMap::new(), |mut acc, state| {
+                acc.entry(state.query_name.as_str())
+                    .or_default()
+                    .push(state);
                 acc
             });
 
@@ -95,7 +99,8 @@ impl<'a> ImmutabilityChecker<'a> {
     ) -> Vec<ImmutabilityViolation> {
         let mut violations = Vec::new();
 
-        let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> = HashMap::new();
+        let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
+            HashMap::new();
         for state in states {
             states_by_version
                 .entry((state.version, state.sql_revision))
@@ -109,18 +114,15 @@ impl<'a> ImmutabilityChecker<'a> {
             };
 
             let (current_sql, source) = match revision_num {
-                Some(rev_num) => {
-                    match version.revisions.iter().find(|r| r.revision == rev_num) {
-                        Some(rev) => (rev.sql_content.as_str(), rev.source.as_str()),
-                        None => continue,
-                    }
-                }
+                Some(rev_num) => match version.revisions.iter().find(|r| r.revision == rev_num) {
+                    Some(rev) => (rev.sql_content.as_str(), rev.source.as_str()),
+                    None => continue,
+                },
                 None => (version.sql_content.as_str(), version.source.as_str()),
             };
 
-            let Some(reference_state) = version_states
-                .iter()
-                .find(|s| s.executed_sql_b64.is_some())
+            let Some(reference_state) =
+                version_states.iter().find(|s| s.executed_sql_b64.is_some())
             else {
                 continue;
             };
@@ -134,10 +136,8 @@ impl<'a> ImmutabilityChecker<'a> {
             };
 
             if stored_sql != current_sql {
-                let affected_partitions: Vec<_> = version_states
-                    .iter()
-                    .map(|s| s.partition_date)
-                    .collect();
+                let affected_partitions: Vec<_> =
+                    version_states.iter().map(|s| s.partition_date).collect();
 
                 violations.push(ImmutabilityViolation {
                     query_name: query.name.clone(),
@@ -158,11 +158,11 @@ impl<'a> ImmutabilityChecker<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dsl::{VersionDef, Destination, ResolvedRevision};
-    use crate::schema::{Schema, PartitionConfig};
-    use crate::invariant::InvariantsDef;
     use crate::drift::checksum::compress_to_base64;
     use crate::drift::state::ExecutionStatus;
+    use crate::dsl::{Destination, ResolvedRevision, VersionDef};
+    use crate::invariant::InvariantsDef;
+    use crate::schema::{PartitionConfig, Schema};
     use chrono::{NaiveDate, Utc};
     use std::collections::HashSet;
 
@@ -254,8 +254,20 @@ mod tests {
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(), 1, None, sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                1,
+                None,
+                sql,
+            ),
         ];
 
         let checker = ImmutabilityChecker::new(&queries);
@@ -274,9 +286,27 @@ mod tests {
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, original_sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(), 1, None, original_sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(), 1, None, original_sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                original_sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 16).unwrap(),
+                1,
+                None,
+                original_sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 17).unwrap(),
+                1,
+                None,
+                original_sql,
+            ),
         ];
 
         let checker = ImmutabilityChecker::new(&queries);
@@ -306,9 +336,13 @@ mod tests {
         );
         let queries = vec![query];
 
-        let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 3, 15).unwrap(), 1, Some(1), original_rev_sql),
-        ];
+        let stored = vec![create_stored_state(
+            "test_query",
+            NaiveDate::from_ymd_opt(2024, 3, 15).unwrap(),
+            1,
+            Some(1),
+            original_rev_sql,
+        )];
 
         let checker = ImmutabilityChecker::new(&queries);
         let report = checker.check(&stored);
@@ -331,16 +365,25 @@ mod tests {
 
         let query = create_test_query(
             "test_query",
-            vec![
-                create_version(1, v1_modified),
-                create_version(2, v2_sql),
-            ],
+            vec![create_version(1, v1_modified), create_version(2, v2_sql)],
         );
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, v1_original),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(), 2, None, v2_sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                v1_original,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+                2,
+                None,
+                v2_sql,
+            ),
         ];
 
         let checker = ImmutabilityChecker::new(&queries);
@@ -359,15 +402,24 @@ mod tests {
         let mut v2 = create_version(2, v2_sql);
         v2.effective_from = NaiveDate::from_ymd_opt(2024, 2, 1).unwrap();
 
-        let query = create_test_query(
-            "test_query",
-            vec![create_version(1, v1_sql), v2],
-        );
+        let query = create_test_query("test_query", vec![create_version(1, v1_sql), v2]);
         let queries = vec![query];
 
         let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, v1_sql),
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(), 2, None, v2_sql),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                v1_sql,
+            ),
+            create_stored_state(
+                "test_query",
+                NaiveDate::from_ymd_opt(2024, 2, 15).unwrap(),
+                2,
+                None,
+                v2_sql,
+            ),
         ];
 
         let checker = ImmutabilityChecker::new(&queries);
@@ -419,8 +471,20 @@ mod tests {
         let queries = vec![query1, query2];
 
         let stored = vec![
-            create_stored_state("query_1", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, q1_original),
-            create_stored_state("query_2", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, q2_original),
+            create_stored_state(
+                "query_1",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                q1_original,
+            ),
+            create_stored_state(
+                "query_2",
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                1,
+                None,
+                q2_original,
+            ),
         ];
 
         let checker = ImmutabilityChecker::new(&queries);
@@ -439,9 +503,13 @@ mod tests {
         let query = create_test_query("test_query", vec![create_version(1, with_newline)]);
         let queries = vec![query];
 
-        let stored = vec![
-            create_stored_state("test_query", NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(), 1, None, original),
-        ];
+        let stored = vec![create_stored_state(
+            "test_query",
+            NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            1,
+            None,
+            original,
+        )];
 
         let checker = ImmutabilityChecker::new(&queries);
         let report = checker.check(&stored);

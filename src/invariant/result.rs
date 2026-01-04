@@ -38,49 +38,58 @@ impl InvariantReport {
     }
 
     pub fn has_errors(&self) -> bool {
-        self.before.iter().chain(self.after.iter()).any(|r| {
-            r.status == CheckStatus::Failed && r.severity == Severity::Error
-        })
+        self.before
+            .iter()
+            .chain(self.after.iter())
+            .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Error)
     }
 
     pub fn has_before_errors(&self) -> bool {
-        self.before.iter().any(|r| {
-            r.status == CheckStatus::Failed && r.severity == Severity::Error
-        })
+        self.before
+            .iter()
+            .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Error)
     }
 
     pub fn has_after_errors(&self) -> bool {
-        self.after.iter().any(|r| {
-            r.status == CheckStatus::Failed && r.severity == Severity::Error
-        })
+        self.after
+            .iter()
+            .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Error)
     }
 
     pub fn has_warnings(&self) -> bool {
-        self.before.iter().chain(self.after.iter()).any(|r| {
-            r.status == CheckStatus::Failed && r.severity == Severity::Warning
-        })
+        self.before
+            .iter()
+            .chain(self.after.iter())
+            .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Warning)
     }
 
     pub fn all_passed(&self) -> bool {
-        self.before.iter().chain(self.after.iter()).all(|r| {
-            r.status == CheckStatus::Passed
-        })
+        self.before
+            .iter()
+            .chain(self.after.iter())
+            .all(|r| r.status == CheckStatus::Passed)
     }
 
     pub fn passed_count(&self) -> usize {
-        self.before.iter().chain(self.after.iter())
+        self.before
+            .iter()
+            .chain(self.after.iter())
             .filter(|r| r.status == CheckStatus::Passed)
             .count()
     }
 
     pub fn failed_count(&self) -> usize {
-        self.before.iter().chain(self.after.iter())
+        self.before
+            .iter()
+            .chain(self.after.iter())
             .filter(|r| r.status == CheckStatus::Failed)
             .count()
     }
 
     pub fn skipped_count(&self) -> usize {
-        self.before.iter().chain(self.after.iter())
+        self.before
+            .iter()
+            .chain(self.after.iter())
             .filter(|r| r.status == CheckStatus::Skipped)
             .count()
     }
@@ -107,7 +116,11 @@ impl CheckResult {
         }
     }
 
-    pub fn skipped(name: impl Into<String>, severity: Severity, message: impl Into<String>) -> Self {
+    pub fn skipped(
+        name: impl Into<String>,
+        severity: Severity,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Skipped,
@@ -156,7 +169,10 @@ mod tests {
     fn test_check_result_with_details() {
         let result = CheckResult::failed("test", Severity::Error, "Failed")
             .with_details("Row count was 50, expected >= 100");
-        assert_eq!(result.details, Some("Row count was 50, expected >= 100".to_string()));
+        assert_eq!(
+            result.details,
+            Some("Row count was 50, expected >= 100".to_string())
+        );
     }
 
     #[test]
@@ -171,9 +187,15 @@ mod tests {
     #[test]
     fn test_invariant_report_with_results() {
         let mut report = InvariantReport::new();
-        report.before.push(CheckResult::passed("check1", Severity::Error, "OK"));
-        report.after.push(CheckResult::failed("check2", Severity::Warning, "Warn"));
-        report.after.push(CheckResult::passed("check3", Severity::Error, "OK"));
+        report
+            .before
+            .push(CheckResult::passed("check1", Severity::Error, "OK"));
+        report
+            .after
+            .push(CheckResult::failed("check2", Severity::Warning, "Warn"));
+        report
+            .after
+            .push(CheckResult::passed("check3", Severity::Error, "OK"));
 
         assert!(!report.has_errors());
         assert!(report.has_warnings());
@@ -185,7 +207,9 @@ mod tests {
     #[test]
     fn test_invariant_report_has_before_errors() {
         let mut report = InvariantReport::new();
-        report.before.push(CheckResult::failed("check1", Severity::Error, "Failed"));
+        report
+            .before
+            .push(CheckResult::failed("check1", Severity::Error, "Failed"));
 
         assert!(report.has_errors());
         assert!(report.has_before_errors());
@@ -195,7 +219,9 @@ mod tests {
     #[test]
     fn test_invariant_report_has_after_errors() {
         let mut report = InvariantReport::new();
-        report.after.push(CheckResult::failed("check1", Severity::Error, "Failed"));
+        report
+            .after
+            .push(CheckResult::failed("check1", Severity::Error, "Failed"));
 
         assert!(report.has_errors());
         assert!(!report.has_before_errors());

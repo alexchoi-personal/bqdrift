@@ -1,26 +1,41 @@
-use std::borrow::Cow;
-use std::path::PathBuf;
+use super::commands::ReplCommand;
+use super::session::ReplSession;
+use crate::error::Result;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
-use rustyline::validate::Validator;
 use rustyline::history::DefaultHistory;
+use rustyline::validate::Validator;
 use rustyline::{Config, Editor, Helper};
-use crate::error::Result;
-use super::commands::ReplCommand;
-use super::session::ReplSession;
+use std::borrow::Cow;
+use std::path::PathBuf;
 
 const COMMANDS: &[&str] = &[
-    "list", "show", "validate", "run", "backfill", "check",
-    "sync", "audit", "init", "scratch", "reload", "status", "help", "exit", "quit",
+    "list", "show", "validate", "run", "backfill", "check", "sync", "audit", "init", "scratch",
+    "reload", "status", "help", "exit", "quit",
 ];
 
 const FLAGS: &[&str] = &[
-    "--query", "--partition", "--version", "--detailed", "--dry-run",
-    "--skip-invariants", "--scratch", "--scratch-ttl", "--from", "--to",
-    "--before", "--after", "--tracking-dataset", "--allow-source-mutation",
-    "--modified-only", "--diff", "--output", "--dataset", "--project",
+    "--query",
+    "--partition",
+    "--version",
+    "--detailed",
+    "--dry-run",
+    "--skip-invariants",
+    "--scratch",
+    "--scratch-ttl",
+    "--from",
+    "--to",
+    "--before",
+    "--after",
+    "--tracking-dataset",
+    "--allow-source-mutation",
+    "--modified-only",
+    "--diff",
+    "--output",
+    "--dataset",
+    "--project",
     "--scratch-project",
 ];
 
@@ -52,7 +67,10 @@ impl Completer for ReplHelper {
 
         if words.is_empty() || (words.len() == 1 && !line_to_pos.ends_with(' ')) {
             let prefix = words.first().copied().unwrap_or("");
-            let start = line_to_pos.rfind(char::is_whitespace).map(|i| i + 1).unwrap_or(0);
+            let start = line_to_pos
+                .rfind(char::is_whitespace)
+                .map(|i| i + 1)
+                .unwrap_or(0);
 
             let completions: Vec<Pair> = COMMANDS
                 .iter()
@@ -69,7 +87,10 @@ impl Completer for ReplHelper {
         let last_word = words.last().copied().unwrap_or("");
 
         if last_word.starts_with('-') {
-            let start = line_to_pos.rfind(char::is_whitespace).map(|i| i + 1).unwrap_or(0);
+            let start = line_to_pos
+                .rfind(char::is_whitespace)
+                .map(|i| i + 1)
+                .unwrap_or(0);
 
             let completions: Vec<Pair> = FLAGS
                 .iter()
@@ -93,12 +114,20 @@ impl Completer for ReplHelper {
             let start = if line_to_pos.ends_with(' ') {
                 pos
             } else {
-                line_to_pos.rfind(char::is_whitespace).map(|i| i + 1).unwrap_or(0)
+                line_to_pos
+                    .rfind(char::is_whitespace)
+                    .map(|i| i + 1)
+                    .unwrap_or(0)
             };
 
-            let prefix = if line_to_pos.ends_with(' ') { "" } else { last_word };
+            let prefix = if line_to_pos.ends_with(' ') {
+                ""
+            } else {
+                last_word
+            };
 
-            let completions: Vec<Pair> = self.queries
+            let completions: Vec<Pair> = self
+                .queries
                 .iter()
                 .filter(|q| q.starts_with(prefix))
                 .map(|q| Pair {
@@ -113,7 +142,8 @@ impl Completer for ReplHelper {
         if words.len() == 1 && line_to_pos.ends_with(' ') {
             let cmd = words[0];
             if cmd == "show" || cmd == "check" || cmd == "backfill" {
-                let completions: Vec<Pair> = self.queries
+                let completions: Vec<Pair> = self
+                    .queries
                     .iter()
                     .map(|q| Pair {
                         display: q.clone(),
@@ -212,10 +242,7 @@ impl InteractiveRepl {
         }
 
         loop {
-            let prompt = format!(
-                "{}> ",
-                self.session.project().unwrap_or("bqdrift")
-            );
+            let prompt = format!("{}> ", self.session.project().unwrap_or("bqdrift"));
 
             match self.editor.readline(&prompt) {
                 Ok(line) => {

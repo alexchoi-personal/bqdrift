@@ -1,9 +1,9 @@
-mod field;
-mod table;
-mod partition;
 mod cluster;
+mod field;
+mod partition;
+mod table;
 
-pub use field::{BqType, Field, FieldMode};
-pub use table::Schema;
-pub use partition::{PartitionConfig, PartitionType, PartitionKey};
 pub use cluster::ClusterConfig;
+pub use field::{BqType, Field, FieldMode};
+pub use partition::{PartitionConfig, PartitionKey, PartitionType};
+pub use table::Schema;

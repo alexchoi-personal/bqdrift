@@ -89,8 +89,16 @@ impl ExecutionArtifact {
 
 pub fn compress_to_base64(content: &str) -> String {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    encoder.write_all(content.as_bytes()).ok();
-    let compressed = encoder.finish().unwrap_or_default();
+    if let Err(e) = encoder.write_all(content.as_bytes()) {
+        tracing::warn!(error = %e, "Failed to write content during gzip compression");
+    }
+    let compressed = match encoder.finish() {
+        Ok(data) => data,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to finish gzip compression");
+            Vec::new()
+        }
+    };
     BASE64.encode(&compressed)
 }
 

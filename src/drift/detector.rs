@@ -28,9 +28,9 @@ impl DriftDetector {
     ) -> Result<DriftReport> {
         let mut report = DriftReport::new();
 
-        let stored_map: HashMap<(String, NaiveDate), &PartitionState> = stored_states
+        let stored_map: HashMap<(&str, NaiveDate), &PartitionState> = stored_states
             .iter()
-            .map(|s| ((s.query_name.clone(), s.partition_date), s))
+            .map(|s| ((s.query_name.as_str(), s.partition_date), s))
             .collect();
 
         for (query_name, query) in &self.queries {
@@ -47,7 +47,7 @@ impl DriftDetector {
                 let drift = self.detect_partition_cached(
                     query,
                     current,
-                    stored_map.get(&(query_name.clone(), current)),
+                    stored_map.get(&(query_name.as_str(), current)),
                     yaml_content,
                     &mut checksum_cache,
                 );

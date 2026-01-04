@@ -1,10 +1,9 @@
 use super::client::BqClient;
+use super::invariant_runner::execute_with_invariants;
 use crate::dsl::Destination;
 use crate::dsl::QueryDef;
 use crate::error::Result;
-use crate::invariant::{
-    resolve_invariants_def, CheckStatus, InvariantChecker, InvariantReport, Severity,
-};
+use crate::invariant::InvariantReport;
 use crate::schema::PartitionKey;
 use chrono::{DateTime, Duration, NaiveTime, Utc};
 
@@ -137,46 +136,18 @@ impl ScratchWriter {
             cluster: query_def.destination.cluster.clone(),
         };
 
-        let mut invariant_report = InvariantReport::default();
+        let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
+        let full_sql = self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
 
-        if run_invariants {
-            let (before_checks, after_checks) = resolve_invariants_def(&version.invariants);
-
-            if !before_checks.is_empty() {
-                let checker =
-                    InvariantChecker::new(&self.client, &scratch_destination, partition_date);
-                let results = checker.run_checks(&before_checks).await?;
-
-                let has_error = results
-                    .iter()
-                    .any(|r| r.status == CheckStatus::Failed && r.severity == Severity::Error);
-
-                invariant_report.before = results;
-
-                if has_error {
-                    return Err(crate::error::BqDriftError::InvariantFailed(
-                        "Before invariant check(s) failed with error severity".to_string(),
-                    ));
-                }
-            }
-
-            let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
-            let full_sql =
-                self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
-            self.client.execute_query(&full_sql).await?;
-
-            if !after_checks.is_empty() {
-                let checker =
-                    InvariantChecker::new(&self.client, &scratch_destination, partition_date);
-                let results = checker.run_checks(&after_checks).await?;
-                invariant_report.after = results;
-            }
-        } else {
-            let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
-            let full_sql =
-                self.build_merge_sql(query_def, &scratch_destination, sql, &partition_key);
-            self.client.execute_query(&full_sql).await?;
-        }
+        let invariant_report = execute_with_invariants(
+            &self.client,
+            &scratch_destination,
+            partition_date,
+            version,
+            run_invariants,
+            || async { self.client.execute_query(&full_sql).await },
+        )
+        .await?;
 
         Ok(ScratchWriteStats {
             query_name: query_def.name.clone(),
@@ -186,11 +157,7 @@ impl ScratchWriter {
             expiration,
             rows_written: None,
             bytes_processed: None,
-            invariant_report: if run_invariants {
-                Some(invariant_report)
-            } else {
-                None
-            },
+            invariant_report,
         })
     }
 

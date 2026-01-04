@@ -1,5 +1,6 @@
 mod bq_executor;
 mod client;
+mod invariant_runner;
 mod partition_writer;
 mod runner;
 mod scratch;

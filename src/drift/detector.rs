@@ -39,10 +39,13 @@ impl<'a> DriftDetector<'a> {
         let num_days = num_days as usize + 1;
         let estimated_capacity = self.queries.len() * num_days;
 
-        let stored_map: HashMap<(&str, NaiveDate), &PartitionState> = stored_states
-            .iter()
-            .map(|s| ((s.query_name.as_str(), s.partition_date), s))
-            .collect();
+        let stored_map: HashMap<(&str, NaiveDate), &PartitionState> = {
+            let mut map = HashMap::with_capacity(stored_states.len());
+            for s in stored_states {
+                map.insert((s.query_name.as_str(), s.partition_date), s);
+            }
+            map
+        };
 
         let partitions: Vec<PartitionDrift> = self
             .queries

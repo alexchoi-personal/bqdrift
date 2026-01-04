@@ -1,12 +1,14 @@
 use super::client::BqClient;
 use super::partition_writer::{PartitionWriteStats, PartitionWriter};
 use crate::dsl::QueryDef;
-use crate::error::Result;
+use crate::error::{BqDriftError, Result};
 use crate::schema::PartitionKey;
 use chrono::{NaiveDate, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
 use std::sync::Arc;
+
+const MAX_BACKFILL_PARTITIONS: usize = 3652;
 
 fn default_parallelism() -> usize {
     std::env::var("BQDRIFT_PARALLELISM")
@@ -112,7 +114,7 @@ impl Runner {
     ) -> Result<PartitionWriteStats> {
         let query = self
             .get_query(query_name)
-            .ok_or_else(|| crate::error::BqDriftError::QueryNotFound(query_name.to_string()))?;
+            .ok_or_else(|| BqDriftError::QueryNotFound(query_name.to_string()))?;
 
         self.writer.write_partition(query, partition_key).await
     }
@@ -141,11 +143,17 @@ impl Runner {
     ) -> Result<RunReport> {
         let query = self
             .get_query(query_name)
-            .ok_or_else(|| crate::error::BqDriftError::QueryNotFound(query_name.to_string()))?;
+            .ok_or_else(|| BqDriftError::QueryNotFound(query_name.to_string()))?;
 
         let mut partitions = Vec::new();
         let mut current = from;
         while current <= to {
+            if partitions.len() >= MAX_BACKFILL_PARTITIONS {
+                return Err(BqDriftError::Partition(format!(
+                    "Backfill range too large: exceeds maximum of {} partitions",
+                    MAX_BACKFILL_PARTITIONS
+                )));
+            }
             partitions.push(current);
             current = match interval {
                 Some(i) => current.next_by(i),

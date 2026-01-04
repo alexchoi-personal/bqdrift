@@ -188,8 +188,35 @@ impl BqClient {
         &self.project_id
     }
 
-    /// Execute a query and return the row count from the first column of the first row.
-    /// Useful for COUNT(*) queries or invariant checks.
+    fn get_cell_value(
+        result: &gcp_bigquery_client::model::query_response::QueryResponse,
+        col_index: usize,
+    ) -> Option<&serde_json::Value> {
+        result
+            .rows
+            .as_ref()?
+            .first()?
+            .columns
+            .as_ref()?
+            .get(col_index)?
+            .value
+            .as_ref()
+    }
+
+    fn parse_cell_as_i64(value: &serde_json::Value) -> Option<i64> {
+        value
+            .as_str()
+            .and_then(|s| s.parse::<i64>().ok())
+            .or_else(|| value.as_i64())
+    }
+
+    fn parse_cell_as_f64(value: &serde_json::Value) -> Option<f64> {
+        value
+            .as_str()
+            .and_then(|s| s.parse::<f64>().ok())
+            .or_else(|| value.as_f64())
+    }
+
     pub async fn query_row_count(&self, sql: &str) -> Result<i64> {
         let request = QueryRequest::new(sql);
 
@@ -205,34 +232,13 @@ impl BqClient {
                 BqDriftError::BigQuery(parse_bq_error(e, ctx))
             })?;
 
-        // Get the first row, first column as integer
-        if let Some(rows) = result.rows.as_ref() {
-            if let Some(first_row) = rows.first() {
-                if let Some(cells) = first_row.columns.as_ref() {
-                    if let Some(first_cell) = cells.first() {
-                        if let Some(value) = &first_cell.value {
-                            if let Some(s) = value.as_str() {
-                                return s.parse::<i64>().map_err(|_| {
-                                    BqDriftError::Schema(format!(
-                                        "Could not parse count value: {}",
-                                        s
-                                    ))
-                                });
-                            } else if let Some(n) = value.as_i64() {
-                                return Ok(n);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Err(BqDriftError::Schema(
-            "query_row_count returned no valid integer value".to_string(),
-        ))
+        Self::get_cell_value(&result, 0)
+            .and_then(Self::parse_cell_as_i64)
+            .ok_or_else(|| {
+                BqDriftError::Schema("query_row_count returned no valid integer value".to_string())
+            })
     }
 
-    /// Execute a query and return a single float value from the first column of the first row.
     pub async fn query_single_float(&self, sql: &str) -> Result<Option<f64>> {
         let request = QueryRequest::new(sql);
 
@@ -248,31 +254,9 @@ impl BqClient {
                 BqDriftError::BigQuery(parse_bq_error(e, ctx))
             })?;
 
-        if let Some(rows) = result.rows.as_ref() {
-            if let Some(first_row) = rows.first() {
-                if let Some(cells) = first_row.columns.as_ref() {
-                    if let Some(first_cell) = cells.first() {
-                        if let Some(value) = &first_cell.value {
-                            if let Some(s) = value.as_str() {
-                                return Ok(Some(s.parse::<f64>().map_err(|_| {
-                                    BqDriftError::Schema(format!(
-                                        "Could not parse float value: {}",
-                                        s
-                                    ))
-                                })?));
-                            } else if let Some(n) = value.as_f64() {
-                                return Ok(Some(n));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(Self::get_cell_value(&result, 0).and_then(Self::parse_cell_as_f64))
     }
 
-    /// Execute a query and return a single integer value from the first column of the first row.
     pub async fn query_single_int(&self, sql: &str) -> Result<Option<i64>> {
         let request = QueryRequest::new(sql);
 
@@ -288,32 +272,9 @@ impl BqClient {
                 BqDriftError::BigQuery(parse_bq_error(e, ctx))
             })?;
 
-        if let Some(rows) = result.rows.as_ref() {
-            if let Some(first_row) = rows.first() {
-                if let Some(cells) = first_row.columns.as_ref() {
-                    if let Some(first_cell) = cells.first() {
-                        if let Some(value) = &first_cell.value {
-                            if let Some(s) = value.as_str() {
-                                return Ok(Some(s.parse::<i64>().map_err(|_| {
-                                    BqDriftError::Schema(format!(
-                                        "Could not parse int value: {}",
-                                        s
-                                    ))
-                                })?));
-                            } else if let Some(n) = value.as_i64() {
-                                return Ok(Some(n));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(None)
+        Ok(Self::get_cell_value(&result, 0).and_then(Self::parse_cell_as_i64))
     }
 
-    /// Execute a query and return two float values from first two columns of the first row.
-    /// Useful for MIN/MAX queries.
     pub async fn query_two_floats(&self, sql: &str) -> Result<(Option<f64>, Option<f64>)> {
         let request = QueryRequest::new(sql);
 
@@ -329,33 +290,8 @@ impl BqClient {
                 BqDriftError::BigQuery(parse_bq_error(e, ctx))
             })?;
 
-        let mut first: Option<f64> = None;
-        let mut second: Option<f64> = None;
-
-        if let Some(rows) = result.rows.as_ref() {
-            if let Some(first_row) = rows.first() {
-                if let Some(cells) = first_row.columns.as_ref() {
-                    if let Some(cell) = cells.first() {
-                        if let Some(value) = &cell.value {
-                            if let Some(s) = value.as_str() {
-                                first = s.parse::<f64>().ok();
-                            } else if let Some(n) = value.as_f64() {
-                                first = Some(n);
-                            }
-                        }
-                    }
-                    if let Some(cell) = cells.get(1) {
-                        if let Some(value) = &cell.value {
-                            if let Some(s) = value.as_str() {
-                                second = s.parse::<f64>().ok();
-                            } else if let Some(n) = value.as_f64() {
-                                second = Some(n);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        let first = Self::get_cell_value(&result, 0).and_then(Self::parse_cell_as_f64);
+        let second = Self::get_cell_value(&result, 1).and_then(Self::parse_cell_as_f64);
 
         Ok((first, second))
     }

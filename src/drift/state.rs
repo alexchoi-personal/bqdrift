@@ -98,7 +98,7 @@ impl DriftReport {
 
     pub fn by_query(&self) -> HashMap<&str, Vec<&PartitionDrift>> {
         let mut grouped: HashMap<&str, Vec<&PartitionDrift>> =
-            HashMap::with_capacity(self.partitions.len().min(64));
+            HashMap::with_capacity(self.partitions.len());
         for p in &self.partitions {
             grouped.entry(&p.query_name).or_default().push(p);
         }

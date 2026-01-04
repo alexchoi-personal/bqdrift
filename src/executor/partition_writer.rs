@@ -56,7 +56,7 @@ impl PartitionWriter {
             })?;
 
         let sql = version.get_sql_for_date(chrono::Utc::now().date_naive());
-        let full_sql = Self::build_merge_sql(query_def, sql, &partition_key);
+        let full_sql = Self::build_merge_sql(query_def, sql, &partition_key)?;
 
         let invariant_report = execute_with_invariants(
             &self.client,
@@ -78,7 +78,11 @@ impl PartitionWriter {
         })
     }
 
-    fn build_merge_sql(query_def: &QueryDef, sql: &str, partition_key: &PartitionKey) -> String {
+    fn build_merge_sql(
+        query_def: &QueryDef,
+        sql: &str,
+        partition_key: &PartitionKey,
+    ) -> Result<String> {
         let dest_table = format!(
             "{}.{}",
             query_def.destination.dataset, query_def.destination.table
@@ -86,10 +90,19 @@ impl PartitionWriter {
         let partition_field = query_def
             .destination
             .partition
-            .field
-            .as_deref()
-            .unwrap_or("date");
-        super::sql_builder::build_merge_sql(&dest_table, partition_field, sql, partition_key)
+            .field_name()
+            .ok_or_else(|| {
+                BqDriftError::Partition(format!(
+                    "Partition field not specified for query '{}'",
+                    query_def.name
+                ))
+            })?;
+        Ok(super::sql_builder::build_merge_sql(
+            &dest_table,
+            partition_field,
+            sql,
+            partition_key,
+        ))
     }
 
     pub async fn write_partition_truncate(

@@ -343,6 +343,13 @@ impl PartitionConfig {
             interval: None,
         }
     }
+
+    pub fn field_name(&self) -> Option<&str> {
+        match self.partition_type {
+            PartitionType::IngestionTime => Some("_PARTITIONDATE"),
+            _ => self.field.as_deref(),
+        }
+    }
 }
 
 #[cfg(test)]

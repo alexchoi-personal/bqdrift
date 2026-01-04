@@ -67,13 +67,30 @@ impl From<&SourceAuditEntry> for AuditTableRow {
 }
 
 fn truncate_sql_preview(sql: &str, max_len: usize) -> String {
-    let normalized: String = sql.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut result = String::with_capacity(max_len);
+    let mut last_was_space = true;
+    let truncate_at = max_len.saturating_sub(3);
 
-    if normalized.len() <= max_len {
-        normalized
-    } else {
-        format!("{}...", &normalized[..max_len.saturating_sub(3)])
+    for ch in sql.chars() {
+        if ch.is_whitespace() {
+            if !last_was_space && result.len() < truncate_at {
+                result.push(' ');
+                last_was_space = true;
+            }
+        } else {
+            if result.len() >= truncate_at {
+                result.push_str("...");
+                return result;
+            }
+            result.push(ch);
+            last_was_space = false;
+        }
     }
+
+    if result.ends_with(' ') {
+        result.pop();
+    }
+    result
 }
 
 #[derive(Debug, Clone)]
@@ -216,14 +233,11 @@ impl SourceAuditReport {
         }
     }
 
-    pub fn by_query(&self) -> HashMap<String, Vec<&SourceAuditEntry>> {
-        let mut grouped: HashMap<String, Vec<&SourceAuditEntry>> =
-            HashMap::with_capacity(self.entries.len().min(64));
+    pub fn by_query(&self) -> HashMap<&str, Vec<&SourceAuditEntry>> {
+        let mut grouped: HashMap<&str, Vec<&SourceAuditEntry>> =
+            HashMap::with_capacity(self.entries.len());
         for entry in &self.entries {
-            grouped
-                .entry(entry.query_name.clone())
-                .or_default()
-                .push(entry);
+            grouped.entry(&entry.query_name).or_default().push(entry);
         }
         grouped
     }
@@ -249,7 +263,7 @@ impl<'a> SourceAuditor<'a> {
         let mut report = SourceAuditReport::new();
 
         let mut states_by_query: HashMap<&str, Vec<&PartitionState>> =
-            HashMap::with_capacity(stored_states.len().min(64));
+            HashMap::with_capacity(stored_states.len());
         for state in stored_states {
             states_by_query
                 .entry(state.query_name.as_str())
@@ -273,7 +287,7 @@ impl<'a> SourceAuditor<'a> {
         let mut entries = Vec::new();
 
         let mut states_by_version: HashMap<(u32, Option<u32>), Vec<&PartitionState>> =
-            HashMap::with_capacity(states.len().min(16));
+            HashMap::with_capacity(states.len());
         for state in states {
             states_by_version
                 .entry((state.version, state.sql_revision))

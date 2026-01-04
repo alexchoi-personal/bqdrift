@@ -24,26 +24,35 @@ impl FileLoader {
     pub fn load_dir(path: impl AsRef<Path>, extension: &str) -> Result<Vec<SqlFile>> {
         let path = path.as_ref();
         let pattern = format!("{}/**/*.{}", path.display(), extension);
-        let files: Vec<SqlFile> = glob::glob(&pattern)
-            .map_err(|e| BqRunnerError::Execution(e.to_string()))?
-            .filter_map(|entry| match entry {
-                Ok(p) => Some(p),
+        let mut files = Vec::new();
+        let mut skipped_count = 0;
+
+        for entry in glob::glob(&pattern).map_err(|e| BqRunnerError::Execution(e.to_string()))? {
+            let file_path = match entry {
+                Ok(p) => p,
                 Err(e) => {
                     warn!(error = %e, "Failed to read glob entry");
-                    None
+                    skipped_count += 1;
+                    continue;
                 }
-            })
-            .filter_map(|path| match std::fs::read_to_string(&path) {
-                Ok(content) => Some(SqlFile {
-                    path: path.clone(),
+            };
+
+            match std::fs::read_to_string(&file_path) {
+                Ok(content) => files.push(SqlFile {
+                    path: file_path,
                     content,
                 }),
                 Err(e) => {
-                    warn!(path = %path.display(), error = %e, "Failed to read file");
-                    None
+                    warn!(path = %file_path.display(), error = %e, "Failed to read file");
+                    skipped_count += 1;
                 }
-            })
-            .collect();
+            }
+        }
+
+        if skipped_count > 0 {
+            warn!(skipped = skipped_count, "Some files could not be loaded");
+        }
+
         Ok(files)
     }
 

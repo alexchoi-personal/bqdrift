@@ -196,9 +196,8 @@ impl<'a> ExecutorRunner<'a> {
         let partition_field = query_def
             .destination
             .partition
-            .field
-            .as_deref()
-            .unwrap_or("date");
+            .field_name()
+            .unwrap_or("_PARTITIONDATE");
         super::sql_builder::build_merge_sql(&dest_table, partition_field, sql, partition_key)
     }
 }

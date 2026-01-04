@@ -131,12 +131,21 @@ impl AsyncJsonRpcServer {
             }
 
             "session_destroy" => {
-                let session_id = request
+                let session_id = match request
                     .params
                     .as_ref()
                     .and_then(|p| p.get("session"))
                     .and_then(|v| v.as_str())
-                    .unwrap_or("default");
+                {
+                    Some(id) => id,
+                    None => {
+                        let _ = self.response_tx.send(JsonRpcResponse::invalid_params(
+                            request.id,
+                            "Missing required 'session' parameter",
+                        ));
+                        return false;
+                    }
+                };
 
                 let mut mgr = self.manager.lock().await;
                 let destroyed = mgr.destroy_session(session_id);
@@ -148,12 +157,21 @@ impl AsyncJsonRpcServer {
             }
 
             "session_keepalive" => {
-                let session_id = request
+                let session_id = match request
                     .params
                     .as_ref()
                     .and_then(|p| p.get("session"))
                     .and_then(|v| v.as_str())
-                    .unwrap_or("default");
+                {
+                    Some(id) => id,
+                    None => {
+                        let _ = self.response_tx.send(JsonRpcResponse::invalid_params(
+                            request.id,
+                            "Missing required 'session' parameter",
+                        ));
+                        return false;
+                    }
+                };
 
                 let mut mgr = self.manager.lock().await;
                 let success = mgr.keepalive(session_id);

@@ -5,6 +5,10 @@ use crate::error::Result;
 use crate::executor::BqClient;
 use chrono::NaiveDate;
 use futures::future::join_all;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
+
+const MAX_CONCURRENT_CHECKS: usize = 10;
 
 pub struct ResolvedInvariant {
     pub name: String,
@@ -58,10 +62,19 @@ impl<'a> InvariantChecker<'a> {
     }
 
     pub async fn run_checks(&self, invariants: &[ResolvedInvariant]) -> Result<Vec<CheckResult>> {
-        let futures: Vec<_> = invariants.iter().map(|inv| self.run_check(inv)).collect();
+        let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_CHECKS));
+        let futures: Vec<_> = invariants
+            .iter()
+            .map(|inv| {
+                let permit = Arc::clone(&semaphore);
+                async move {
+                    let _permit = permit.acquire().await;
+                    self.run_check(inv).await
+                }
+            })
+            .collect();
 
         let results: Vec<Result<CheckResult>> = join_all(futures).await;
-
         results.into_iter().collect()
     }
 
@@ -132,9 +145,8 @@ impl<'a> InvariantChecker<'a> {
         let partition_field = self
             .destination
             .partition
-            .field
-            .as_deref()
-            .unwrap_or("date");
+            .field_name()
+            .unwrap_or("_PARTITIONDATE");
         format!(
             "SELECT * FROM {} WHERE {} = '{}'",
             self.destination_table(),

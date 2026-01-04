@@ -6,7 +6,6 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use tracing::warn;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Checksums {
@@ -60,13 +59,8 @@ impl Checksums {
 }
 
 pub(crate) fn schema_to_json(schema: &Schema) -> String {
-    match serde_json::to_string(&schema.fields) {
-        Ok(json) => json,
-        Err(e) => {
-            warn!("Failed to serialize schema to JSON: {}", e);
-            String::new()
-        }
-    }
+    serde_json::to_string(&schema.fields)
+        .expect("Schema serialization should never fail - all field types are serializable")
 }
 
 impl ExecutionArtifact {
@@ -112,16 +106,12 @@ impl ExecutionArtifact {
 
 pub fn compress_to_base64(content: &str) -> String {
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-    if let Err(e) = encoder.write_all(content.as_bytes()) {
-        tracing::warn!(error = %e, "Failed to write content during gzip compression");
-    }
-    let compressed = match encoder.finish() {
-        Ok(data) => data,
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to finish gzip compression");
-            Vec::new()
-        }
-    };
+    encoder
+        .write_all(content.as_bytes())
+        .expect("In-memory gzip compression should never fail");
+    let compressed = encoder
+        .finish()
+        .expect("Finalizing in-memory gzip should never fail");
     BASE64.encode(&compressed)
 }
 

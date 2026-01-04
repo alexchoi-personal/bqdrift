@@ -97,7 +97,7 @@ impl AsyncJsonRpcServer {
                 let sessions = mgr.list_sessions();
                 let _ = self.response_tx.send(JsonRpcResponse::success(
                     request.id,
-                    serde_json::to_value(sessions).unwrap_or_default(),
+                    serde_json::to_value(sessions).expect("SessionInfo serialization cannot fail"),
                 ));
                 return false;
             }
@@ -107,7 +107,7 @@ impl AsyncJsonRpcServer {
                 let info = mgr.server_info();
                 let _ = self.response_tx.send(JsonRpcResponse::success(
                     request.id,
-                    serde_json::to_value(info).unwrap_or_default(),
+                    serde_json::to_value(info).expect("ServerInfo serialization cannot fail"),
                 ));
                 return false;
             }
@@ -119,7 +119,8 @@ impl AsyncJsonRpcServer {
                     Ok(info) => {
                         let _ = self.response_tx.send(JsonRpcResponse::success(
                             request.id,
-                            serde_json::to_value(info).unwrap_or_default(),
+                            serde_json::to_value(info)
+                                .expect("SessionInfo serialization cannot fail"),
                         ));
                     }
                     Err(mut err) => {

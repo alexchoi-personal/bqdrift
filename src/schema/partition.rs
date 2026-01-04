@@ -1,7 +1,6 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use tracing::warn;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "UPPERCASE")]
@@ -161,18 +160,9 @@ impl PartitionKey {
             PartitionKey::Hour(dt) => dt.date(),
             PartitionKey::Day(d) => *d,
             PartitionKey::Month { year, month } => NaiveDate::from_ymd_opt(*year, *month, 1)
-                .unwrap_or_else(|| {
-                    warn!(
-                        year = year,
-                        month = month,
-                        "Invalid month partition, using epoch"
-                    );
-                    NaiveDate::default()
-                }),
-            PartitionKey::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap_or_else(|| {
-                warn!(year = y, "Invalid year partition, using epoch");
-                NaiveDate::default()
-            }),
+                .expect("Month partition should have valid year/month - validated at construction"),
+            PartitionKey::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1)
+                .expect("Year partition should have valid year - validated at construction"),
             PartitionKey::Range(_) => NaiveDate::default(),
         }
     }

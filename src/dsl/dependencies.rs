@@ -14,6 +14,8 @@ static TABLE_PATTERN: Lazy<Regex> = Lazy::new(|| {
     ).expect("table pattern regex is valid")
 });
 
+static DIALECT: BigQueryDialect = BigQueryDialect {};
+
 #[derive(Debug, Clone, Default)]
 pub struct SqlDependencies {
     pub tables: HashSet<String>,
@@ -21,10 +23,9 @@ pub struct SqlDependencies {
 
 impl SqlDependencies {
     pub fn extract(sql: &str) -> Self {
-        let dialect = BigQueryDialect {};
         let mut deps = SqlDependencies::default();
 
-        match Parser::parse_sql(&dialect, sql) {
+        match Parser::parse_sql(&DIALECT, sql) {
             Ok(statements) => {
                 for statement in statements {
                     deps.extract_from_statement(&statement);

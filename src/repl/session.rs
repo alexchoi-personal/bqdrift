@@ -1073,15 +1073,14 @@ impl ReplSession {
         let auditor = crate::SourceAuditor::new(queries_to_audit);
         let report = auditor.audit(&stored_states);
 
-        let entries_to_show: Vec<_> = if modified_only {
+        let entries_to_show: Vec<&crate::SourceAuditEntry> = if modified_only {
             report
                 .entries
                 .iter()
                 .filter(|e| e.status == crate::SourceStatus::Modified)
-                .cloned()
                 .collect()
         } else {
-            report.entries.clone()
+            report.entries.iter().collect()
         };
 
         match output {

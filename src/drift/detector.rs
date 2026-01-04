@@ -54,13 +54,14 @@ impl<'a> DriftDetector<'a> {
                     .map(|s| s.as_str())
                     .unwrap_or("");
 
+                let query_name_owned = query_name.to_string();
                 let mut checksum_cache: HashMap<u32, Checksums> = HashMap::new();
                 let mut results = Vec::with_capacity(num_days);
 
                 let mut current = from;
                 while current <= to {
-                    let drift = self.detect_partition_cached(
-                        query_name,
+                    let drift = Self::detect_partition_cached(
+                        &query_name_owned,
                         query,
                         current,
                         stored_map.get(&(query_name, current)),
@@ -86,8 +87,7 @@ impl<'a> DriftDetector<'a> {
     }
 
     fn detect_partition_cached(
-        &self,
-        query_name: &str,
+        query_name_owned: &str,
         query: &QueryDef,
         partition_date: NaiveDate,
         stored: Option<&&PartitionState>,
@@ -134,7 +134,7 @@ impl<'a> DriftDetector<'a> {
         };
 
         PartitionDrift {
-            query_name: query_name.to_string(),
+            query_name: query_name_owned.to_owned(),
             partition_key: PartitionKey::Day(partition_date),
             state,
             current_version: version.map(|v| v.version).unwrap_or(0),

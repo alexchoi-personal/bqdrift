@@ -110,56 +110,20 @@ impl MigrationTracker {
 
     pub async fn get_last_run(
         &self,
-        query_name: &str,
-        partition_date: NaiveDate,
+        _query_name: &str,
+        _partition_date: NaiveDate,
     ) -> Result<Option<QueryRun>> {
-        let table_name = format!("{}.{}", self.dataset, TRACKING_TABLE);
-
-        let sql = format!(
-            r#"
-            SELECT
-                query_name, query_version, sql_revision, partition_date,
-                executed_at, rows_written, bytes_processed, execution_time_ms, status
-            FROM `{table_name}`
-            WHERE query_name = '{query_name}'
-              AND partition_date = '{partition_date}'
-            ORDER BY executed_at DESC
-            LIMIT 1
-            "#,
-            table_name = table_name,
-            query_name = escape_sql_string(query_name),
-            partition_date = partition_date,
-        );
-
-        self.client.execute_query(&sql).await?;
+        tracing::warn!("MigrationTracker::get_last_run is not yet implemented");
         Ok(None)
     }
 
     pub async fn get_runs_for_date_range(
         &self,
-        query_name: &str,
-        from: NaiveDate,
-        to: NaiveDate,
+        _query_name: &str,
+        _from: NaiveDate,
+        _to: NaiveDate,
     ) -> Result<Vec<QueryRun>> {
-        let table_name = format!("{}.{}", self.dataset, TRACKING_TABLE);
-
-        let sql = format!(
-            r#"
-            SELECT
-                query_name, query_version, sql_revision, partition_date,
-                executed_at, rows_written, bytes_processed, execution_time_ms, status
-            FROM `{table_name}`
-            WHERE query_name = '{query_name}'
-              AND partition_date BETWEEN '{from}' AND '{to}'
-            ORDER BY partition_date, executed_at DESC
-            "#,
-            table_name = table_name,
-            query_name = escape_sql_string(query_name),
-            from = from,
-            to = to,
-        );
-
-        self.client.execute_query(&sql).await?;
+        tracing::warn!("MigrationTracker::get_runs_for_date_range is not yet implemented");
         Ok(Vec::new())
     }
 }

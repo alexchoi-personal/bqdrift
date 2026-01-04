@@ -390,14 +390,12 @@ impl BqClient {
             Ok(_) => Ok(()),
             Err(BQError::ResponseError { ref error }) if error.error.code == 404 => Ok(()),
             Err(e) => {
-                tracing::warn!(
-                    "Failed to drop table {}.{}.{}: {}",
-                    self.project_id,
+                let ctx = ErrorContext::new().with_operation("drop_table").with_table(
+                    &self.project_id,
                     dataset,
                     table,
-                    e
                 );
-                Ok(())
+                Err(BqDriftError::BigQuery(parse_bq_error(e, ctx)))
             }
         }
     }

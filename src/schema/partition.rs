@@ -137,7 +137,7 @@ impl PartitionKey {
 
     pub fn next_by(&self, interval: i64) -> Self {
         match self {
-            PartitionKey::Range(n) => PartitionKey::Range(n + interval),
+            PartitionKey::Range(n) => PartitionKey::Range(n.saturating_add(interval)),
             _ => self.next(),
         }
     }

@@ -1,6 +1,7 @@
 use chrono::{NaiveDate, NaiveDateTime};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use tracing::warn;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "UPPERCASE")]
@@ -60,10 +61,12 @@ impl PartitionKey {
                     let month = parts[1]
                         .parse::<u32>()
                         .map_err(|_| format!("Invalid month in month partition: '{}'", s))?;
-                    if (1..=12).contains(&month) {
-                        Ok(PartitionKey::Month { year, month })
-                    } else {
+                    if year <= 0 {
+                        Err(format!("Year must be positive, got: {}", year))
+                    } else if !(1..=12).contains(&month) {
                         Err(format!("Month must be 1-12, got: {}", month))
+                    } else {
+                        Ok(PartitionKey::Month { year, month })
                     }
                 } else {
                     Err(format!(
@@ -74,8 +77,14 @@ impl PartitionKey {
             }
             PartitionType::Year => s
                 .parse::<i32>()
-                .map(PartitionKey::Year)
-                .map_err(|_| format!("Invalid year partition: '{}'. Expected format: YYYY", s)),
+                .map_err(|_| format!("Invalid year partition: '{}'. Expected format: YYYY", s))
+                .and_then(|year| {
+                    if year <= 0 {
+                        Err(format!("Year must be positive, got: {}", year))
+                    } else {
+                        Ok(PartitionKey::Year(year))
+                    }
+                }),
             PartitionType::Range => s
                 .parse::<i64>()
                 .map(PartitionKey::Range)
@@ -146,10 +155,19 @@ impl PartitionKey {
         match self {
             PartitionKey::Hour(dt) => dt.date(),
             PartitionKey::Day(d) => *d,
-            PartitionKey::Month { year, month } => {
-                NaiveDate::from_ymd_opt(*year, *month, 1).unwrap_or_default()
-            }
-            PartitionKey::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap_or_default(),
+            PartitionKey::Month { year, month } => NaiveDate::from_ymd_opt(*year, *month, 1)
+                .unwrap_or_else(|| {
+                    warn!(
+                        year = year,
+                        month = month,
+                        "Invalid month partition, using epoch"
+                    );
+                    NaiveDate::default()
+                }),
+            PartitionKey::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap_or_else(|| {
+                warn!(year = y, "Invalid year partition, using epoch");
+                NaiveDate::default()
+            }),
             PartitionKey::Range(_) => NaiveDate::default(),
         }
     }

@@ -131,7 +131,10 @@ impl ReplCommand {
         }
 
         let parts: Vec<&str> = input.split_whitespace().collect();
-        let cmd = parts[0].to_lowercase();
+        let cmd = parts
+            .first()
+            .ok_or_else(|| crate::error::BqDriftError::Repl("Empty command".to_string()))?
+            .to_lowercase();
 
         match cmd.as_str() {
             "exit" | "quit" | "q" => Ok(ReplCommand::Exit),

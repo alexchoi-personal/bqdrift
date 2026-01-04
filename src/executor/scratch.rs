@@ -59,7 +59,7 @@ impl ScratchWriter {
             return Utc::now() + Duration::hours(hours as i64);
         }
 
-        let midnight = NaiveTime::from_hms_opt(0, 0, 0).expect("midnight is a valid time");
+        let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap_or(NaiveTime::MIN);
 
         match partition_key {
             PartitionKey::Hour(dt) => {
@@ -77,14 +77,14 @@ impl ScratchWriter {
                     *year
                 };
                 let date = chrono::NaiveDate::from_ymd_opt(next_year, next_month, 1)
-                    .expect("valid month transition");
+                    .unwrap_or_else(|| Utc::now().date_naive());
                 DateTime::from_naive_utc_and_offset(date.and_time(midnight), Utc)
             }
             PartitionKey::Year(year) => {
                 let next_year = year.checked_add(1).unwrap_or(i32::MAX);
-                let date = chrono::NaiveDate::from_ymd_opt(next_year, 1, 1).unwrap_or_else(|| {
-                    chrono::NaiveDate::from_ymd_opt(i32::MAX, 12, 31).expect("max date is valid")
-                });
+                let date = chrono::NaiveDate::from_ymd_opt(next_year, 1, 1)
+                    .or_else(|| chrono::NaiveDate::from_ymd_opt(i32::MAX, 12, 31))
+                    .unwrap_or_else(|| Utc::now().date_naive());
                 DateTime::from_naive_utc_and_offset(date.and_time(midnight), Utc)
             }
             PartitionKey::Range(_) => Utc::now() + Duration::hours(24),

@@ -140,7 +140,7 @@ impl Completer for ReplHelper {
         }
 
         if words.len() == 1 && line_to_pos.ends_with(' ') {
-            let cmd = words[0];
+            let cmd = words.first().copied().unwrap_or("");
             if cmd == "show" || cmd == "check" || cmd == "backfill" {
                 let completions: Vec<Pair> = self
                     .queries

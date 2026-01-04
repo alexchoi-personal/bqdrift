@@ -333,7 +333,7 @@ impl BqClient {
         if let Some(rows) = result.rows.as_ref() {
             if let Some(first_row) = rows.first() {
                 if let Some(cells) = first_row.columns.as_ref() {
-                    if let Some(cell) = cells.get(0) {
+                    if let Some(cell) = cells.first() {
                         if let Some(value) = &cell.value {
                             if let Some(s) = value.as_str() {
                                 first = s.parse::<f64>().ok();

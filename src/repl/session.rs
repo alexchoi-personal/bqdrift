@@ -1202,11 +1202,11 @@ impl ReplSession {
         match partition_type {
             PartitionType::Hour => {
                 let now = Utc::now().naive_utc();
-                PartitionKey::Hour(
-                    now.date()
-                        .and_hms_opt(now.time().hour(), 0, 0)
-                        .expect("hour from time().hour() is always valid"),
-                )
+                let hour_dt = now
+                    .date()
+                    .and_hms_opt(now.time().hour(), 0, 0)
+                    .unwrap_or(now);
+                PartitionKey::Hour(hour_dt)
             }
             PartitionType::Day | PartitionType::IngestionTime => PartitionKey::Day(today),
             PartitionType::Month => PartitionKey::Month {

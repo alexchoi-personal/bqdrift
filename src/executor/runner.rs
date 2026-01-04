@@ -113,9 +113,9 @@ impl Runner {
         query_name: &str,
         partition_key: PartitionKey,
     ) -> Result<PartitionWriteStats> {
-        let query = self.get_query(query_name).ok_or_else(|| {
-            crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
-        })?;
+        let query = self
+            .get_query(query_name)
+            .ok_or_else(|| crate::error::BqDriftError::QueryNotFound(query_name.to_string()))?;
 
         self.writer.write_partition(query, partition_key).await
     }
@@ -142,9 +142,9 @@ impl Runner {
         to: PartitionKey,
         interval: Option<i64>,
     ) -> Result<RunReport> {
-        let query = self.get_query(query_name).ok_or_else(|| {
-            crate::error::BqDriftError::DslParse(format!("Query '{}' not found", query_name))
-        })?;
+        let query = self
+            .get_query(query_name)
+            .ok_or_else(|| crate::error::BqDriftError::QueryNotFound(query_name.to_string()))?;
 
         let mut partitions = Vec::new();
         let mut current = from;

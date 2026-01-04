@@ -2,7 +2,7 @@ use crate::error::Result;
 use crate::executor::BqClient;
 use chrono::{DateTime, NaiveDate, Utc};
 
-const TRACKING_TABLE: &str = "_bqdrift_query_runs";
+const DEFAULT_TRACKING_TABLE: &str = "_bqdrift_query_runs";
 
 fn escape_sql_string(s: &str) -> String {
     s.replace('\'', "''")
@@ -30,6 +30,7 @@ pub enum RunStatus {
 pub struct MigrationTracker {
     client: BqClient,
     dataset: String,
+    table_name: String,
 }
 
 impl MigrationTracker {
@@ -37,11 +38,21 @@ impl MigrationTracker {
         Self {
             client,
             dataset: dataset.into(),
+            table_name: DEFAULT_TRACKING_TABLE.to_string(),
         }
     }
 
+    pub fn with_table_name(mut self, table_name: impl Into<String>) -> Self {
+        self.table_name = table_name.into();
+        self
+    }
+
+    fn full_table_name(&self) -> String {
+        format!("{}.{}", self.dataset, self.table_name)
+    }
+
     pub async fn ensure_tracking_table(&self) -> Result<()> {
-        let table_name = format!("{}.{}", self.dataset, TRACKING_TABLE);
+        let table_name = self.full_table_name();
 
         let create_sql = format!(
             r#"
@@ -65,7 +76,7 @@ impl MigrationTracker {
     }
 
     pub async fn record_run(&self, run: &QueryRun) -> Result<()> {
-        let table_name = format!("{}.{}", self.dataset, TRACKING_TABLE);
+        let table_name = self.full_table_name();
         let status_str = match run.status {
             RunStatus::Success => "SUCCESS",
             RunStatus::Failed => "FAILED",

@@ -56,6 +56,9 @@ pub enum BqDriftError {
     #[error("Executor error: {0}")]
     Executor(String),
 
+    #[error("Query not found: {0}")]
+    QueryNotFound(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 

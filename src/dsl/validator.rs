@@ -147,8 +147,7 @@ impl QueryValidator {
         sorted.sort_by_key(|v| v.version);
 
         for window in sorted.windows(2) {
-            let prev = &window[0];
-            let curr = &window[1];
+            let [prev, curr] = window else { continue };
             if curr.effective_from < prev.effective_from {
                 warnings.push(ValidationWarning {
                     code: "W001",
@@ -183,10 +182,8 @@ impl QueryValidator {
         sorted.sort_by_key(|v| v.version);
 
         for window in sorted.windows(2) {
-            let prev = &window[0];
-            let curr = &window[1];
+            let [prev, curr] = window else { continue };
 
-            // Check for removed fields
             for field in &prev.schema.fields {
                 if !curr.schema.has_field(&field.name) {
                     warnings.push(ValidationWarning {

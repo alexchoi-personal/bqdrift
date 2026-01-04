@@ -211,12 +211,13 @@ GROUP BY 1, 2, 3
 
 ```rust
 use bqdrift::{QueryLoader, Runner, BqClient};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client = BqClient::new("my-project").await?;
     let loader = QueryLoader::new();
-    let queries = loader.load_dir("./queries")?;
+    let queries = Arc::new(loader.load_dir("./queries")?);
 
     let runner = Runner::new(client, queries);
 

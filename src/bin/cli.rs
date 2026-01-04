@@ -2,6 +2,7 @@ use chrono::{Datelike, NaiveDate, Timelike};
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::Arc;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -636,7 +637,7 @@ async fn cmd_run(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use bqdrift::executor::{ScratchConfig, ScratchWriter};
 
-    let queries = loader.load_dir(queries_path)?;
+    let queries = Arc::new(loader.load_dir(queries_path)?);
 
     if dry_run {
         let queries_to_run: Vec<_> = match &query_name {
@@ -768,7 +769,7 @@ async fn cmd_run(
             };
 
             let client = BqClient::new(project).await?;
-            let runner = Runner::new(client, queries);
+            let runner = Runner::new(client, Arc::clone(&queries));
 
             info!("Running query '{}' for partition {}", name, partition_key);
             let stats = runner.run_query_partition(&name, partition_key).await?;
@@ -781,7 +782,7 @@ async fn cmd_run(
             };
 
             let client = BqClient::new(project).await?;
-            let runner = Runner::new(client, queries);
+            let runner = Runner::new(client, Arc::clone(&queries));
 
             info!("Running all queries for partition {}", partition_key);
             let report = runner.run_for_partition(partition_key).await?;
@@ -917,7 +918,7 @@ async fn cmd_backfill(
     dry_run: bool,
     skip_invariants: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let queries = loader.load_dir(queries_path)?;
+    let queries = Arc::new(loader.load_dir(queries_path)?);
 
     let query = queries
         .iter()
@@ -952,7 +953,7 @@ async fn cmd_backfill(
     }
 
     let client = BqClient::new(project).await?;
-    let runner = Runner::new(client, queries);
+    let runner = Runner::new(client, Arc::clone(&queries));
 
     let report = runner
         .backfill_partitions(query_name, from_key, to_key, None)

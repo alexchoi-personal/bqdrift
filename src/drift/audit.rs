@@ -194,10 +194,11 @@ impl SourceAuditReport {
     pub fn by_query(&self) -> HashMap<String, Vec<&SourceAuditEntry>> {
         let mut grouped: HashMap<String, Vec<&SourceAuditEntry>> = HashMap::new();
         for entry in &self.entries {
-            grouped
-                .entry(entry.query_name.clone())
-                .or_default()
-                .push(entry);
+            if let Some(vec) = grouped.get_mut(&entry.query_name) {
+                vec.push(entry);
+            } else {
+                grouped.insert(entry.query_name.clone(), vec![entry]);
+            }
         }
         grouped
     }

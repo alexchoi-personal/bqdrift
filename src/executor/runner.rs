@@ -6,6 +6,7 @@ use crate::schema::PartitionKey;
 use chrono::{NaiveDate, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 fn default_parallelism() -> usize {
     std::env::var("BQDRIFT_PARALLELISM")
@@ -29,13 +30,13 @@ pub struct RunFailure {
 
 pub struct Runner {
     writer: PartitionWriter,
-    queries: Vec<QueryDef>,
+    queries: Arc<Vec<QueryDef>>,
     query_index: HashMap<String, usize>,
     parallelism: usize,
 }
 
 impl Runner {
-    pub fn new(client: BqClient, queries: Vec<QueryDef>) -> Self {
+    pub fn new(client: BqClient, queries: Arc<Vec<QueryDef>>) -> Self {
         let query_index = queries
             .iter()
             .enumerate()

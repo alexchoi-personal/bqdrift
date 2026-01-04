@@ -470,7 +470,7 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let runner = crate::Runner::new(client.clone(), (*queries).clone());
+        let runner = crate::Runner::new(client.clone(), Arc::clone(&queries));
 
         match query_name {
             Some(name) => {
@@ -749,7 +749,7 @@ impl ReplSession {
             Err(e) => return ReplResult::failure(e.to_string()),
         };
 
-        let runner = crate::Runner::new(client.clone(), (*queries).clone());
+        let runner = crate::Runner::new(client.clone(), Arc::clone(&queries));
 
         match runner
             .backfill_partitions(query_name, from_key, to_key, None)

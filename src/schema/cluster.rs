@@ -13,6 +13,11 @@ impl ClusterConfig {
                 "BigQuery supports maximum 4 clustering fields".into(),
             ));
         }
+        if fields.iter().any(|f| f.is_empty()) {
+            return Err(BqDriftError::Cluster(
+                "Cluster field names cannot be empty".into(),
+            ));
+        }
         Ok(Self { fields })
     }
 

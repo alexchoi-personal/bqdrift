@@ -11,4 +11,4 @@ pub use partition_writer::{PartitionWriteStats, PartitionWriter};
 pub use runner::{RunFailure, RunReport, Runner};
 pub use scratch::{PromoteStats, ScratchConfig, ScratchWriteStats, ScratchWriter};
 
-pub use bq_executor::{ColumnDef, ColumnInfo, ExecutorWriteStats, QueryResult};
+pub use bq_executor::{ColumnDef, ColumnInfo, QueryResult};

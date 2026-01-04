@@ -2,6 +2,17 @@ use super::bq_error::{BigQueryError, QueryErrorLocation};
 use gcp_bigquery_client::error::{BQError, ResponseError};
 use regex::Regex;
 
+fn truncate_to_char_boundary(s: &str, max_chars: usize) -> String {
+    let char_count = s.chars().count();
+    if char_count <= max_chars {
+        s.to_string()
+    } else {
+        let mut result: String = s.chars().take(max_chars).collect();
+        result.push_str("...");
+        result
+    }
+}
+
 pub fn parse_bq_error(error: BQError, context: ErrorContext) -> BigQueryError {
     match &error {
         BQError::ResponseError { error: resp } => parse_response_error(resp, context),
@@ -328,12 +339,7 @@ impl ErrorContext {
 
     pub fn with_sql(mut self, sql: impl Into<String>) -> Self {
         let full_sql = sql.into();
-        // Keep first 500 chars as preview
-        self.sql = Some(if full_sql.len() > 500 {
-            format!("{}...", &full_sql[..500])
-        } else {
-            full_sql
-        });
+        self.sql = Some(truncate_to_char_boundary(&full_sql, 500));
         self
     }
 

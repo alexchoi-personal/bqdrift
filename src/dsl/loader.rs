@@ -83,8 +83,8 @@ impl QueryLoader {
                 .resolver
                 .resolve_schema(&raw_version.schema, &resolved_schemas)?;
 
-            let sql_content = raw_version.source.clone();
-            let dependencies = SqlDependencies::extract(&sql_content).tables;
+            let dependencies = SqlDependencies::extract(&raw_version.source).tables;
+            let sql_content = raw_version.source;
 
             let revisions = self.resolve_revisions(&raw_version.revisions)?;
 

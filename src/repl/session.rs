@@ -634,7 +634,7 @@ impl ReplSession {
         };
 
         let query = match queries.iter().find(|q| q.name == query_name) {
-            Some(q) => q.clone(),
+            Some(q) => q,
             None => return ReplResult::failure(format!("Query '{}' not found", query_name)),
         };
 
@@ -663,7 +663,7 @@ impl ReplSession {
         }
 
         match scratch_writer
-            .write_partition(&query, partition_key.clone(), !skip_invariants)
+            .write_partition(query, partition_key, !skip_invariants)
             .await
         {
             Ok(stats) => {
@@ -1068,19 +1068,17 @@ impl ReplSession {
                 Err(e) => ReplResult::failure(e.to_string()),
             },
             _ => {
+                let summary = report.summary();
                 let mut output_lines = Vec::new();
                 output_lines.push("Source Audit Report".to_string());
-                output_lines.push(format!("  ✓ {} current", report.current_count()));
-                output_lines.push(format!("  ⚠ {} modified", report.modified_count()));
-                output_lines.push(format!(
-                    "  ○ {} never executed",
-                    report.never_executed_count()
-                ));
+                output_lines.push(format!("  ✓ {} current", summary.current));
+                output_lines.push(format!("  ⚠ {} modified", summary.modified));
+                output_lines.push(format!("  ○ {} never executed", summary.never_executed));
 
                 let data = serde_json::json!({
-                    "current": report.current_count(),
-                    "modified": report.modified_count(),
-                    "never_executed": report.never_executed_count()
+                    "current": summary.current,
+                    "modified": summary.modified,
+                    "never_executed": summary.never_executed
                 });
                 ReplResult::success_with_both(output_lines.join("\n"), data)
             }

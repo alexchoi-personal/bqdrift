@@ -15,8 +15,8 @@ use bqdrift::{
     ImmutabilityChecker, ImmutabilityViolation, SourceAuditor, SourceStatus,
 };
 use bqdrift::{
-    resolve_invariants_def, CheckStatus, InvariantChecker, QueryLoader, QueryValidator, Runner,
-    Severity,
+    resolve_invariants_def, CheckStatus, InvariantChecker, QueryDef, QueryLoader, QueryValidator,
+    Runner, Severity,
 };
 use tabled::{settings::Style, Table};
 
@@ -1387,13 +1387,16 @@ fn cmd_audit(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let queries = loader.load_dir(queries_path)?;
 
-    let queries_to_audit: Vec<_> = match &query_filter {
-        Some(name) => queries
-            .iter()
-            .filter(|q| &q.name == name)
-            .cloned()
-            .collect(),
-        None => queries,
+    let (queries_to_audit, _filtered): (std::borrow::Cow<'_, [QueryDef]>, _) = match &query_filter {
+        Some(name) => {
+            let filtered: Vec<QueryDef> = queries
+                .iter()
+                .filter(|q| &q.name == name)
+                .cloned()
+                .collect();
+            (std::borrow::Cow::Owned(filtered), true)
+        }
+        None => (std::borrow::Cow::Borrowed(&queries), false),
     };
 
     if queries_to_audit.is_empty() {
@@ -1406,8 +1409,6 @@ fn cmd_audit(
 
     info!("Auditing {} queries", queries_to_audit.len());
 
-    // TODO: Fetch stored states from BigQuery tracking table
-    // For now, we pass empty states (demonstration mode)
     let stored_states = vec![];
 
     let auditor = SourceAuditor::new(&queries_to_audit);
@@ -1453,10 +1454,11 @@ fn cmd_audit(
             table.with(Style::markdown());
             println!("{}", table);
 
+            let summary = report.summary();
             println!("\nSummary:");
-            println!("  ✓ {} current", report.current_count());
-            println!("  ⚠ {} modified", report.modified_count());
-            println!("  ○ {} never executed", report.never_executed_count());
+            println!("  ✓ {} current", summary.current);
+            println!("  ⚠ {} modified", summary.modified);
+            println!("  ○ {} never executed", summary.never_executed);
 
             if show_diff && report.has_modifications() {
                 println!("\nModified Sources:\n");

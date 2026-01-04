@@ -111,7 +111,7 @@ fn test_drift_detector_current_state_with_fixture() {
         .unwrap();
 
     assert_eq!(drift.state, DriftState::Current);
-    assert!(drift.current_sql.is_some());
+    assert!(drift.current_sql.is_none());
     assert!(drift.executed_sql_b64.is_some());
 }
 

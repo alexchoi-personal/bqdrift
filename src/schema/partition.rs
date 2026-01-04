@@ -146,11 +146,10 @@ impl PartitionKey {
         match self {
             PartitionKey::Hour(dt) => dt.date(),
             PartitionKey::Day(d) => *d,
-            PartitionKey::Month { year, month } => NaiveDate::from_ymd_opt(*year, *month, 1)
-                .expect("month partition has valid year/month"),
-            PartitionKey::Year(y) => {
-                NaiveDate::from_ymd_opt(*y, 1, 1).expect("year partition has valid year")
+            PartitionKey::Month { year, month } => {
+                NaiveDate::from_ymd_opt(*year, *month, 1).unwrap_or_default()
             }
+            PartitionKey::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap_or_default(),
             PartitionKey::Range(_) => NaiveDate::default(),
         }
     }

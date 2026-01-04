@@ -28,10 +28,11 @@ impl DriftDetector {
     ) -> Result<DriftReport> {
         let mut report = DriftReport::new();
 
-        let stored_map: HashMap<(&str, NaiveDate), &PartitionState> = stored_states
-            .iter()
-            .map(|s| ((s.query_name.as_str(), s.partition_date), s))
-            .collect();
+        let mut stored_map: HashMap<(&str, NaiveDate), &PartitionState> =
+            HashMap::with_capacity(stored_states.len());
+        for s in stored_states {
+            stored_map.insert((s.query_name.as_str(), s.partition_date), s);
+        }
 
         for (query_name, query) in &self.queries {
             let yaml_content = self
@@ -73,10 +74,6 @@ impl DriftDetector {
         checksum_cache: &mut HashMap<u32, Checksums>,
     ) -> PartitionDrift {
         let version = query.get_version_for_date(partition_date);
-        let current_sql = version.map(|v| {
-            v.get_sql_for_date(chrono::Utc::now().date_naive())
-                .to_string()
-        });
 
         let (state, executed_version, caused_by, executed_sql_b64) = match (version, stored) {
             (None, _) => (DriftState::NeverRun, None, None, None),
@@ -127,6 +124,15 @@ impl DriftDetector {
                     }
                 }
             }
+        };
+
+        let current_sql = if state.needs_rerun() {
+            version.map(|v| {
+                v.get_sql_for_date(chrono::Utc::now().date_naive())
+                    .to_string()
+            })
+        } else {
+            None
         };
 
         PartitionDrift {
@@ -272,7 +278,7 @@ mod tests {
         assert_eq!(report.partitions.len(), 1);
         let drift = &report.partitions[0];
         assert_eq!(drift.state, DriftState::Current);
-        assert!(drift.current_sql.is_some());
+        assert!(drift.current_sql.is_none());
         assert!(drift.executed_sql_b64.is_some());
     }
 

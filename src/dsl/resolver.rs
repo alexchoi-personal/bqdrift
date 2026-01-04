@@ -70,17 +70,14 @@ impl VariableResolver {
     }
 
     fn extract_version_ref(&self, ref_str: &str) -> Result<u32> {
-        if let Some(caps) = VARIABLE_PATTERN.captures(ref_str) {
-            let version: u32 = caps
-                .get(1)
-                .expect("regex match has group 1")
-                .as_str()
-                .parse()
-                .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
-            Ok(version)
-        } else {
-            Err(BqDriftError::InvalidVersionRef(ref_str.to_string()))
-        }
+        let caps = VARIABLE_PATTERN
+            .captures(ref_str)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
+        caps.get(1)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(ref_str.to_string()))?
+            .as_str()
+            .parse()
+            .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))
     }
 
     pub fn resolve_sql_ref(
@@ -88,28 +85,31 @@ impl VariableResolver {
         sql_ref: &str,
         resolved_sqls: &HashMap<u32, String>,
     ) -> Result<String> {
-        if let Some(caps) = VARIABLE_PATTERN.captures(sql_ref) {
-            let version: u32 = caps
-                .get(1)
-                .expect("regex match has group 1")
-                .as_str()
-                .parse()
-                .map_err(|_| BqDriftError::InvalidVersionRef(sql_ref.to_string()))?;
+        let Some(caps) = VARIABLE_PATTERN.captures(sql_ref) else {
+            return Ok(sql_ref.to_string());
+        };
 
-            let field = caps.get(2).expect("regex match has group 2").as_str();
-            if field != "sql" {
-                return Err(BqDriftError::VariableResolution(format!(
-                    "Expected 'sql' field, got '{}'",
-                    field
-                )));
-            }
+        let version: u32 = caps
+            .get(1)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(sql_ref.to_string()))?
+            .as_str()
+            .parse()
+            .map_err(|_| BqDriftError::InvalidVersionRef(sql_ref.to_string()))?;
 
-            resolved_sqls.get(&version).cloned().ok_or_else(|| {
-                BqDriftError::InvalidVersionRef(format!("SQL for version {} not found", version))
-            })
-        } else {
-            Ok(sql_ref.to_string())
+        let field = caps
+            .get(2)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(sql_ref.to_string()))?
+            .as_str();
+        if field != "sql" {
+            return Err(BqDriftError::VariableResolution(format!(
+                "Expected 'sql' field, got '{}'",
+                field
+            )));
         }
+
+        resolved_sqls.get(&version).cloned().ok_or_else(|| {
+            BqDriftError::InvalidVersionRef(format!("SQL for version {} not found", version))
+        })
     }
 
     pub fn is_variable_ref(&self, s: &str) -> bool {
@@ -185,26 +185,29 @@ impl VariableResolver {
     }
 
     fn extract_invariants_version_ref(&self, ref_str: &str) -> Result<u32> {
-        if let Some(caps) = VARIABLE_PATTERN.captures(ref_str) {
-            let version: u32 = caps
-                .get(1)
-                .expect("regex match has group 1")
-                .as_str()
-                .parse()
-                .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
+        let caps = VARIABLE_PATTERN
+            .captures(ref_str)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
 
-            let field = caps.get(2).expect("regex match has group 2").as_str();
-            if field != "invariants" {
-                return Err(BqDriftError::VariableResolution(format!(
-                    "Expected 'invariants' field, got '{}'",
-                    field
-                )));
-            }
+        let version: u32 = caps
+            .get(1)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(ref_str.to_string()))?
+            .as_str()
+            .parse()
+            .map_err(|_| BqDriftError::InvalidVersionRef(ref_str.to_string()))?;
 
-            Ok(version)
-        } else {
-            Err(BqDriftError::InvalidVersionRef(ref_str.to_string()))
+        let field = caps
+            .get(2)
+            .ok_or_else(|| BqDriftError::InvalidVersionRef(ref_str.to_string()))?
+            .as_str();
+        if field != "invariants" {
+            return Err(BqDriftError::VariableResolution(format!(
+                "Expected 'invariants' field, got '{}'",
+                field
+            )));
         }
+
+        Ok(version)
     }
 }
 
